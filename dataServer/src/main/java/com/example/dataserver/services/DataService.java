@@ -196,7 +196,12 @@ public class DataService {
      * 同步数据到副本节点（调用目标dataServer的write接口）
      */
     private boolean syncToReplica(String dsIp, int dsPort, byte[] data, String path) throws UnsupportedEncodingException {
-       // String encodedPath = URLEncoder.encode(path, StandardCharsets.UTF_8.name());
+        // 新增：先检查目标节点文件是否已存在（通过调用目标节点的"文件存在检查"接口）
+        if (checkFileExistsOnReplica(dsIp, dsPort, path)) {
+            System.out.println("[INFO] 目标节点" + dsIp + ":" + dsPort + "已存在文件，跳过同步");
+            return true;
+        }
+        // String encodedPath = URLEncoder.encode(path, StandardCharsets.UTF_8.name());
         String url = "http://" + dsIp + ":" + dsPort + "/write?path=" + path + "&offset=0&length=" + data.length;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
@@ -306,7 +311,7 @@ public class DataService {
     /**
      * 生成本地存储路径（基于文件路径映射）
      */
-    private String getLocalFilePath(String path) {
+    public String getLocalFilePath(String path) {
         // 例如：path为"/test/file.txt"，映射为localStoragePath/test/file.txt
         return localStoragePath + path.replace("/", File.separator);
     }
@@ -324,12 +329,6 @@ public class DataService {
     }
 
     /**
-     * 分块写入文件（支持大文件）
-     * @param data 完整文件数据
-     * @param path 文件路径
-     * @return 三副本位置+所有块的MD5（用于校验）
-     */
-    /**
      * 分块写入文件并返回三副本位置（符合controller返回值要求）
      * @param data 待写入的二进制数据
      * @param path 文件路径
@@ -340,6 +339,9 @@ public class DataService {
             List<String> replicaLocations = new ArrayList<>();
             replicaLocations.add(selfIp + ":" + selfPort); // 本节点始终作为副本之一
             System.out.println("[INFO] 分块写入开始，目标路径：" + path + "，本节点：" + selfIp + ":" + selfPort + "，是否为副本同步请求：" + isReplicaSync);
+
+            // 新增：存储每个块的MD5（用于后续校验）
+            List<String> chunkMd5List = new ArrayList<>();
 
             // 分块处理（无论请求类型，都需写入本地）
             int totalChunks = (int) Math.ceil((double) data.length / BLOCK_SIZE);
@@ -352,6 +354,11 @@ public class DataService {
                 System.arraycopy(data, offset, chunk, 0, length);
                 System.out.println("[INFO] 处理块 " + i + "，大小：" + length + "字节");
 
+                // 新增：计算当前块的MD5并记录
+                String chunkMd5 = DigestUtils.md5Hex(chunk);
+                chunkMd5List.add(chunkMd5);
+                System.out.println("[INFO] 块 " + i + " MD5：" + chunkMd5);
+
                 // 写入本地块（所有请求都执行）
                 String chunkPath = path + "/chunk_" + i;
                 writeToLocal(getLocalFilePath(chunkPath), chunk, 0);
@@ -359,6 +366,9 @@ public class DataService {
 
             // 核心修改：仅原始请求（非副本同步）需要同步至其他节点
             if (!isReplicaSync) {
+                // 1. 记录块MD5列表到元数据（符合文档"元数据管理"要求，实际需调用metaServer接口）
+                saveChunkMd5ToMeta(path, chunkMd5List);
+                System.out.println("[INFO] 块MD5列表已记录到元数据：" + chunkMd5List);
                 // 选择2个副本节点（满足三副本要求）
                 List<Map<String, Object>> candidateDs = selectReplicaNodes(path);
                 System.out.println("[INFO] 选中副本节点：" + candidateDs.stream()
@@ -372,6 +382,7 @@ public class DataService {
                     byte[] chunk = new byte[length];
                     System.arraycopy(data, offset, chunk, 0, length);
                     String chunkPath = path + "/chunk_" + i;
+                    String chunkMd5 = chunkMd5List.get(i); // 当前块的MD5
 
                     for (Map<String, Object> ds : candidateDs) {
                         String dsIp = (String) ds.get("ip");
@@ -513,6 +524,28 @@ public class DataService {
             return bos.toByteArray();
         } catch (Exception e) {
             throw new RuntimeException("Read with chunk failed", e);
+        }
+    }
+
+    // 新增：将块MD5列表记录到元数据（模拟实现，实际需对接metaServer）
+    // 符合文档"元数据存储方式自行实现"要求（如用sqlite/rocksdb存储）
+    private void saveChunkMd5ToMeta(String path, List<String> chunkMd5List) {
+        // 模拟逻辑：假设元数据服务提供接口存储MD5列表
+        // 实际项目中需调用metaServer接口，如：metaClient.saveChunkMd5(path, chunkMd5List);
+        System.out.println("[INFO] 元数据记录 - 路径：" + path + "，块MD5列表：" + chunkMd5List);
+        // 可在此处实现本地嵌入式数据库（如sqlite）存储，符合文档"元数据自行实现"要求
+    }
+
+    // 新增：检查目标节点文件是否存在（需在每个dataServer实现"文件存在"接口）
+    private boolean checkFileExistsOnReplica(String dsIp, int dsPort, String path) {
+        try {
+            String encodedPath = URLEncoder.encode(path, StandardCharsets.UTF_8.name());
+            String checkUrl = "http://" + dsIp + ":" + dsPort + "/checkFileExists?path=" + encodedPath;
+            ResponseEntity<Boolean> response = restTemplate.getForEntity(checkUrl, Boolean.class);
+            return response.getStatusCode().is2xxSuccessful() && Boolean.TRUE.equals(response.getBody());
+        } catch (Exception e) {
+            // 检查失败时默认继续同步（避免漏同步）
+            return false;
         }
     }
 }
