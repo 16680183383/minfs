@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,14 +34,14 @@ public class DataController {
             @RequestParam String path,
             @RequestParam int offset,
             @RequestParam int length,
-            @RequestHeader(required = false) String xIsReplicaSync,
+            @RequestHeader(value = "X-Is-Replica-Sync", required = false) String xIsReplicaSync,
             HttpServletRequest request) {
         try {
             // 读取请求体中的二进制数据
             byte[] data = request.getInputStream().readAllBytes();
 
             // 核心修改：判断是否为副本同步请求（头存在且为"true"）
-            boolean isReplicaSync = "true".equals(xIsReplicaSync);
+            boolean isReplicaSync = "true".equalsIgnoreCase(xIsReplicaSync);
             // 调用服务层方法时传入标识
             List<String> replicaLocations = dataService.writeWithChunk(data, path, isReplicaSync);
 
@@ -99,5 +100,19 @@ public class DataController {
     @RequestMapping("shutdown")
     public void shutdownServer(){
         System.exit(-1);
+    }
+
+    // 每个dataServer需实现/checkFileExists接口（Controller层）
+    @RequestMapping(value = "checkFileExists", method = RequestMethod.GET)
+    public ResponseEntity<Boolean> checkFileExists(
+            @RequestParam String path,
+            @RequestHeader String fileSystemName) {
+        try {
+            String localChunkPath = dataService.getLocalFilePath(path + "/chunk_0"); // 检查第一个块（简化）
+            boolean exists = new File(localChunkPath).exists();
+            return ResponseEntity.ok(exists);
+        } catch (Exception e) {
+            return ResponseEntity.ok(false);
+        }
     }
 }
