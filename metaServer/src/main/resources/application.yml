@@ -1,0 +1,40 @@
+server:
+  port: 8000
+spring:
+  task:
+    execution:
+      pool:
+        core-size: 10
+        max-size: 20
+        queue-capacity: 1000
+  application:
+    name: minfs-metaserver
+
+# MetaServer配置
+metaserver:
+  zk:
+    connect:
+      string: localhost:2181
+    root:
+      path: /minfs
+  metadata:
+    db:
+      path: /data/metadata/rocksdb
+  cluster:
+    heartbeat:
+      interval: 10000  # 心跳间隔，毫秒
+      timeout: 30000   # 心跳超时，毫秒
+  fsck:
+    interval: 120000   # FSCK检查间隔，毫秒
+
+# 日志配置
+logging:
+  level:
+    com.ksyun.campus.metaserver: INFO
+    org.apache.zookeeper: WARN
+    org.rocksdb: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/metaserver.log
