@@ -1,0 +1,24 @@
+# HTTP客户端
+requests>=2.28.0
+urllib3>=1.26.0
+
+# ZooKeeper客户端
+kazoo>=2.8.0
+
+# 日志
+colorlog>=6.7.0
+
+# 测试框架
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# 类型检查
+mypy>=1.0.0
+
+# 代码格式化
+black>=22.0.0
+isort>=5.10.0
+
+# 文档生成
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.0.0
