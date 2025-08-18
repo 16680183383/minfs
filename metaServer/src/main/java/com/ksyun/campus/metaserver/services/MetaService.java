@@ -23,6 +23,9 @@ public class MetaService {
     @Autowired
     private DataServerClientService dataServerClient;
     
+    @Autowired
+    private ReplicationService replicationService;
+    
     // 简单轮询计数器（全局）
     private final AtomicInteger roundRobinCounter = new AtomicInteger(0);
     
@@ -318,38 +321,7 @@ public class MetaService {
         return createFile(path, FileType.Directory);
     }
     
-    /**
-     * 重命名文件或目录
-     */
-    public boolean renameFile(String oldPath, String newPath) {
-        StatInfo statInfo = getFile(oldPath);
-        if (statInfo == null) {
-            log.warn("源文件/目录不存在: {}", oldPath);
-            return false;
-        }
-        
-        if (metadataStorage.exists(newPath)) {
-            log.warn("目标路径已存在: {}", newPath);
-            return false;
-        }
-        
-        // 创建新的元数据
-        StatInfo newStatInfo = new StatInfo();
-        newStatInfo.setPath(newPath);
-        newStatInfo.setSize(statInfo.getSize());
-        newStatInfo.setMtime(System.currentTimeMillis());
-        newStatInfo.setType(statInfo.getType());
-        newStatInfo.setReplicaData(statInfo.getReplicaData());
-        
-        // 保存新路径的元数据
-        metadataStorage.saveMetadata(newPath, newStatInfo);
-        
-        // 删除旧路径的元数据
-        deleteFile(oldPath);
-        
-        log.info("重命名文件/目录: {} -> {}", oldPath, newPath);
-        return true;
-    }
+    
     
     /**
      * 获取DataServer状态信息

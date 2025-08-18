@@ -6,6 +6,8 @@ import com.ksyun.campus.metaserver.services.MetaService;
 import com.ksyun.campus.metaserver.services.FsckServices;
 import com.ksyun.campus.metaserver.services.MetadataStorageService;
 import com.ksyun.campus.metaserver.services.ZkMetaServerService;
+import com.ksyun.campus.metaserver.services.ReplicationService;
+import com.ksyun.campus.metaserver.domain.ReplicationType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -34,6 +36,20 @@ public class MetaController {
     @Autowired
     private ZkMetaServerService zkMetaServerService;
     
+    @Autowired
+    private ReplicationService replicationService;
+
+    @Autowired
+    private org.springframework.web.client.RestTemplate restTemplate;
+
+    private java.net.URI buildLeaderUri(String leader, String path, String query) {
+        try {
+            return new java.net.URI("http://" + leader + path + (query == null ? "" : ("?" + query)));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
     /**
      * 获取文件状态信息
      */
@@ -54,7 +70,36 @@ public class MetaController {
     @RequestMapping("create")
     public ResponseEntity<StatInfo> createFile(@RequestParam String path) {
         log.info("创建文件: path={}", path);
+        if (!zkMetaServerService.isLeader()) {
+            String leader = zkMetaServerService.getLeaderAddress();
+            if (leader != null) {
+                java.net.URI uri = buildLeaderUri(leader, "/create", "path=" + path);
+                ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, StatInfo.class);
+                return resp;
+            }
+        }
         StatInfo statInfo = metaService.createFile(path, FileType.File);
+        // 先确保父目录链在Follower存在（幂等）
+        try {
+            String parent = path;
+            java.util.List<String> dirChain = new java.util.ArrayList<>();
+            int idx = parent.lastIndexOf('/');
+            if (idx > 0) {
+                parent = parent.substring(0, idx);
+                while (parent != null && !"/".equals(parent) && parent.startsWith("/")) {
+                    dirChain.add(0, parent);
+                    int i = parent.lastIndexOf('/');
+                    if (i <= 0) break;
+                    parent = parent.substring(0, i);
+                }
+            }
+            for (String dir : dirChain) {
+                replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, java.util.Map.of());
+            }
+        } catch (Exception e) {
+            log.warn("复制父目录链失败(不影响本地创建): {}", path, e);
+        }
+        replicationService.replicateToFollowers(ReplicationType.CREATE_FILE, path, java.util.Map.of("size", 0));
         return ResponseEntity.ok(statInfo);
     }
     
@@ -64,7 +109,36 @@ public class MetaController {
     @RequestMapping("mkdir")
     public ResponseEntity<StatInfo> mkdir(@RequestParam String path) {
         log.info("创建目录: path={}", path);
+        if (!zkMetaServerService.isLeader()) {
+            String leader = zkMetaServerService.getLeaderAddress();
+            if (leader != null) {
+                java.net.URI uri = buildLeaderUri(leader, "/mkdir", "path=" + path);
+                ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, StatInfo.class);
+                return resp;
+            }
+        }
         StatInfo statInfo = metaService.createDirectory(path);
+        // 为保证Follower侧的父目录链也存在，这里将父链全部复制（幂等）
+        try {
+            String p = path;
+            java.util.List<String> chain = new java.util.ArrayList<>();
+            while (p != null && !"/".equals(p) && p.startsWith("/")) {
+                chain.add(0, p); // 头插，最终从上到下
+                int idx = p.lastIndexOf('/');
+                if (idx <= 0) {
+                    break;
+                }
+                p = p.substring(0, idx);
+            }
+            // 复制父链每一层
+            for (String dir : chain) {
+                replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, Map.of());
+            }
+        } catch (Exception e) {
+            log.warn("复制父目录链失败(不影响本地创建): {}", path, e);
+            // 回退为只复制当前目录
+            replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, path, Map.of());
+        }
         return ResponseEntity.ok(statInfo);
     }
     
@@ -81,11 +155,70 @@ public class MetaController {
             log.info("写入文件: path={}, offset={}, length={}", 
                     path, offset, length);
             
-            // 读取请求体中的二进制数据
+            // 如果不是Leader，则将写请求和原始数据转发给Leader
+            if (!zkMetaServerService.isLeader()) {
+                String leader = zkMetaServerService.getLeaderAddress();
+                if (leader != null) {
+                    java.net.URI uri = buildLeaderUri(leader, "/write", "path=" + path + "&offset=" + offset + "&length=" + length);
+                    org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+                    byte[] forwardBody = request.getInputStream().readAllBytes();
+                    org.springframework.http.HttpEntity<byte[]> entity = new org.springframework.http.HttpEntity<>(forwardBody, headers);
+                    ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.POST, entity, StatInfo.class);
+                    return resp;
+                } else {
+                    return ResponseEntity.status(503).body(null);
+                }
+            }
+
+            // 读取请求体中的二进制数据（Leader本地写）
             byte[] data = request.getInputStream().readAllBytes();
             
             // 调用MetaService写入文件
             StatInfo statInfo = metaService.writeFile(path, data, offset, length);
+
+            // 先复制父目录链与CREATE_FILE（幂等，避免边写边建时Follower缺失父链/文件）
+            try {
+                String parent = path;
+                java.util.List<String> dirChain = new java.util.ArrayList<>();
+                int idx = parent.lastIndexOf('/');
+                if (idx > 0) {
+                    parent = parent.substring(0, idx);
+                    while (parent != null && !"/".equals(parent) && parent.startsWith("/")) {
+                        dirChain.add(0, parent);
+                        int i = parent.lastIndexOf('/');
+                        if (i <= 0) break;
+                        parent = parent.substring(0, i);
+                    }
+                }
+                for (String dir : dirChain) {
+                    replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, java.util.Map.of());
+                }
+                replicationService.replicateToFollowers(ReplicationType.CREATE_FILE, path, java.util.Map.of("size", statInfo.getSize()));
+            } catch (Exception ex) {
+                log.warn("写入前置复制父链/文件失败(不影响本地写): {}", path, ex);
+            }
+
+            // 复制到从节点：携带大小与副本信息（可选）
+            java.util.List<java.util.Map<String, Object>> replicasPayload = new java.util.ArrayList<>();
+            if (statInfo.getReplicaData() != null) {
+                for (com.ksyun.campus.metaserver.domain.ReplicaData r : statInfo.getReplicaData()) {
+                    java.util.Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("id", r.id);
+                    m.put("dsNode", r.dsNode);
+                    m.put("path", r.path);
+                    m.put("offset", r.offset);
+                    m.put("length", r.length);
+                    m.put("isPrimary", r.isPrimary);
+                    replicasPayload.add(m);
+                }
+            }
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("size", statInfo.getSize());
+            if (!replicasPayload.isEmpty()) {
+                payload.put("replicas", replicasPayload);
+            }
+            replicationService.replicateToFollowers(ReplicationType.WRITE, path, payload);
             
             return ResponseEntity.ok(statInfo);
             
@@ -94,6 +227,8 @@ public class MetaController {
             return ResponseEntity.status(500).body(null);
         }
     }
+
+    
     
     /**
      * 列出目录内容
@@ -111,8 +246,22 @@ public class MetaController {
     @RequestMapping("delete")
     public ResponseEntity<Map<String, Object>> delete(@RequestParam String path) {
         log.info("删除文件/目录: path={}", path);
+        // 非Leader将请求转发到Leader，避免各自执行导致不一致
+        if (!zkMetaServerService.isLeader()) {
+            String leader = zkMetaServerService.getLeaderAddress();
+            if (leader != null) {
+                java.net.URI uri = buildLeaderUri(leader, "/delete", "path=" + path);
+                ResponseEntity<Map> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, Map.class);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = resp.getBody() == null ? new HashMap<>() : (Map<String, Object>) resp.getBody();
+                return ResponseEntity.status(resp.getStatusCode()).body(body);
+            }
+        }
         
         boolean deleteSuccess = metaService.deleteFile(path);
+        if (deleteSuccess) {
+            replicationService.replicateToFollowers(ReplicationType.DELETE, path, Map.of());
+        }
         
         Map<String, Object> result = new HashMap<>();
         result.put("success", deleteSuccess);
@@ -261,39 +410,6 @@ public class MetaController {
     }
     
     /**
-     * 创建目录
-     */
-    @RequestMapping("createDirectory")
-    public ResponseEntity<StatInfo> createDirectory(@RequestParam String path) {
-        log.info("创建目录: path={}", path);
-        StatInfo statInfo = metaService.createDirectory(path);
-        return ResponseEntity.ok(statInfo);
-    }
-    
-    /**
-     * 重命名文件或目录
-     */
-    @RequestMapping("rename")
-    public ResponseEntity<Map<String, Object>> renameFile(@RequestParam String oldPath,
-                                                        @RequestParam String newPath) {
-        log.info("重命名文件/目录: oldPath={}, newPath={}", oldPath, newPath);
-        
-        boolean renameSuccess = metaService.renameFile(oldPath, newPath);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", renameSuccess);
-        result.put("oldPath", oldPath);
-        result.put("newPath", newPath);
-        result.put("message", renameSuccess ? "重命名成功" : "重命名失败");
-        
-        if (renameSuccess) {
-            return ResponseEntity.ok(result);
-        } else {
-            return ResponseEntity.status(500).body(result);
-        }
-    }
-    
-    /**
      * 列出所有文件
      */
     @RequestMapping("listAll")
@@ -395,5 +511,33 @@ public class MetaController {
         }
         
         return ResponseEntity.ok(result);
+    }
+
+    // Leader导出快照，Follower用于重放
+    @RequestMapping(value = "internal/snapshot", method = RequestMethod.GET)
+    public ResponseEntity<Map<String, Object>> exportSnapshot() {
+        List<StatInfo> all = metaService.getAllFiles();
+        List<Map<String, Object>> files = all.stream().map(s -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("path", s.getPath());
+            m.put("type", s.getType().name());
+            m.put("size", s.getSize());
+            return m;
+        }).toList();
+        return ResponseEntity.ok(Map.of("files", files));
+    }
+
+    // 内部复制接收接口（仅Follower调用）
+    @RequestMapping(value = "internal/replicate", method = RequestMethod.POST)
+    public ResponseEntity<Map<String, Object>> internalReplicate(
+            @RequestParam String type,
+            @RequestParam String path,
+            @RequestBody(required = false) Map<String, Object> payload) {
+        try {
+            boolean ok = replicationService.applyReplication(ReplicationType.valueOf(type), path, payload == null ? Map.of() : payload);
+            return ResponseEntity.ok(Map.of("success", ok));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
     }
 }

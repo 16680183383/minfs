@@ -220,6 +220,7 @@ public class ZkMetaServerService implements ApplicationRunner {
                         server.put("host", parts[0]);
                         server.put("port", Integer.parseInt(parts[1]));
                         server.put("status", parts[2]);
+                        server.put("address", parts[0] + ":" + parts[1]);
                         if (parts.length >= 4) {
                             server.put("registerTime", Long.parseLong(parts[3]));
                         }
@@ -254,6 +255,26 @@ public class ZkMetaServerService implements ApplicationRunner {
      */
     public boolean isLeader() {
         return isLeader.get();
+    }
+
+    /**
+     * 获取当前Leader地址 host:port
+     */
+    public String getLeaderAddress() {
+        try {
+            String leaderNodePath = zkRootPath + "/leader/leader";
+            byte[] data = zooKeeper.getData(leaderNodePath, false, null);
+            if (data != null && data.length > 0) {
+                String s = new String(data);
+                String[] parts = s.split(":");
+                if (parts.length >= 2) {
+                    return parts[0] + ":" + parts[1];
+                }
+            }
+        } catch (Exception e) {
+            log.warn("获取Leader地址失败", e);
+        }
+        return null;
     }
     
     /**
