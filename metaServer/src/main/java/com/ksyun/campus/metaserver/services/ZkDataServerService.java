@@ -1,6 +1,7 @@
 package com.ksyun.campus.metaserver.services;
 
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.zookeeper.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,8 @@ public class ZkDataServerService {
     
     private ZooKeeper zooKeeper;
     private final Map<String, Map<String, Object>> dataServers = new ConcurrentHashMap<>();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private String dataServerPath;
     
     @PostConstruct
     public void init() {
@@ -53,6 +56,7 @@ public class ZkDataServerService {
     private void watchDataServers() {
         try {
             String dataServerPath = zkRootPath + "/dataservers";
+            this.dataServerPath = dataServerPath;
             
             // 创建dataservers路径
             try {
@@ -118,18 +122,29 @@ public class ZkDataServerService {
      * 检查数据服务器心跳
      */
     private void checkDataServerHeartbeats() {
-        long currentTime = System.currentTimeMillis();
-        long timeout = 30000; // 30秒超时
-        
-        for (Map.Entry<String, Map<String, Object>> entry : dataServers.entrySet()) {
-            String serverId = entry.getKey();
-            Map<String, Object> server = entry.getValue();
-            
-            Long lastHeartbeat = (Long) server.get("lastHeartbeat");
-            if (lastHeartbeat != null && currentTime - lastHeartbeat > timeout) {
-                log.warn("数据服务器 {} 心跳超时，标记为不可用", serverId);
-                markDataServerInactive(serverId);
+        try {
+            if (dataServerPath == null) {
+                dataServerPath = zkRootPath + "/dataservers";
             }
+            List<String> children = zooKeeper.getChildren(dataServerPath, false);
+            Set<String> aliveSet = new HashSet<>(children);
+
+            // 标记存在的为active并刷新时间，不存在的为inactive
+            for (Map.Entry<String, Map<String, Object>> entry : dataServers.entrySet()) {
+                String serverId = entry.getKey();
+                Map<String, Object> server = entry.getValue();
+                if (aliveSet.contains(serverId)) {
+                    server.put("active", true);
+                    server.put("lastHeartbeat", System.currentTimeMillis());
+                } else {
+                    if (Boolean.TRUE.equals(server.get("active"))) {
+                        log.warn("数据服务器 {} 不在ZK列表中，标记为不可用", serverId);
+                    }
+                    server.put("active", false);
+                }
+            }
+        } catch (Exception e) {
+            log.error("心跳存在性检查失败", e);
         }
     }
     
@@ -141,10 +156,10 @@ public class ZkDataServerService {
             for (String child : children) {
                 try {
                     byte[] data = zooKeeper.getData(dataServerPath + "/" + child, false, null);
-                    String serverInfo = new String(data);
+                    String serverInfo = data != null ? new String(data) : "";
                     Map<String, Object> server = parseServerInfo(child, serverInfo);
                     dataServers.put(child, server);
-                    log.info("加载数据服务器: {} -> {}", child, serverInfo);
+                    log.info("加载数据服务器: {} -> {}", child, serverInfo.isEmpty() ? "(no data)" : serverInfo);
                 } catch (Exception e) {
                     log.error("加载数据服务器 {} 信息失败", child, e);
                 }
@@ -161,25 +176,86 @@ public class ZkDataServerService {
         Map<String, Object> server = new HashMap<>();
         server.put("id", serverId);
         
-        // 解析服务器信息格式: "host:port:capacity"
-        String[] parts = serverInfo.split(":");
-        if (parts.length >= 2) {
-            server.put("host", parts[0]);
-            server.put("port", Integer.parseInt(parts[1]));
-            server.put("address", parts[0] + ":" + parts[1]);
-            
-            if (parts.length >= 3) {
-                server.put("capacity", Long.parseLong(parts[2]));
+        // 优先解析节点data；支持JSON格式：
+        // {"rack":"rack-04","port":9003,"zone":"az-01 ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+        if (serverInfo != null && !serverInfo.isEmpty()) {
+            String info = serverInfo.trim();
+            if (info.startsWith("{")) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> json = objectMapper.readValue(info, Map.class);
+                    String ip = String.valueOf(json.getOrDefault("ip", ""));
+                    Object portObj = json.get("port");
+                    int port = portObj instanceof Number ? ((Number) portObj).intValue() : Integer.parseInt(String.valueOf(portObj));
+                    String zone = json.get("zone") != null ? String.valueOf(json.get("zone")).trim() : null;
+                    String rack = json.get("rack") != null ? String.valueOf(json.get("rack")) : null;
+                    long total = json.get("totalCapacity") instanceof Number ? ((Number) json.get("totalCapacity")).longValue() : 0L;
+                    long used = json.get("usedCapacity") instanceof Number ? ((Number) json.get("usedCapacity")).longValue() : 0L;
+                    String status = json.get("status") != null ? String.valueOf(json.get("status")) : "unknown";
+
+                    server.put("ip", ip);
+                    server.put("host", ip);
+                    server.put("port", port);
+                    server.put("address", ip + ":" + port);
+                    server.put("zone", zone);
+                    server.put("rack", rack);
+                    server.put("totalCapacity", total);
+                    server.put("usedCapacity", used);
+                    server.put("capacity", total);
+                    server.put("usedSpace", used);
+                    server.put("active", "alive".equalsIgnoreCase(status));
+                } catch (Exception jsonEx) {
+                    log.warn("解析DataServer JSON失败，尝试按host:port:capacity解析: {}", info, jsonEx);
+                    fillFromColonSeparated(server, info);
+                }
             } else {
-                server.put("capacity", 1024 * 1024 * 1024L); // 默认1GB
+                fillFromColonSeparated(server, info);
+            }
+        } else {
+            // 从节点名解析
+            if (serverId.contains(":")) {
+                String[] hp = serverId.split(":", 2);
+                server.put("host", hp[0]);
+                try {
+                    server.put("port", Integer.parseInt(hp[1]));
+                } catch (NumberFormatException ignore) {
+                    server.put("port", 0);
+                }
+                server.put("address", serverId);
+                server.put("capacity", 1024 * 1024 * 1024L);
+            } else {
+                server.put("address", serverId);
             }
         }
         
         server.put("usedSpace", 0L);
-        server.put("active", true);
+        server.putIfAbsent("active", true);
         server.put("lastHeartbeat", System.currentTimeMillis());
         
         return server;
+    }
+
+    private void fillFromColonSeparated(Map<String, Object> server, String info) {
+        String[] parts = info.split(":");
+        if (parts.length >= 2) {
+            server.put("host", parts[0]);
+            try {
+                server.put("port", Integer.parseInt(parts[1]));
+            } catch (NumberFormatException e) {
+                server.put("port", 0);
+            }
+            server.put("address", parts[0] + ":" + parts[1]);
+            if (parts.length >= 3) {
+                try {
+                    server.put("capacity", Long.parseLong(parts[2]));
+                } catch (NumberFormatException e) {
+                    server.put("capacity", 1024 * 1024 * 1024L);
+                }
+            } else {
+                server.put("capacity", 1024 * 1024 * 1024L);
+            }
+            server.put("active", true);
+        }
     }
     
     public List<Map<String, Object>> getActiveDataServers() {

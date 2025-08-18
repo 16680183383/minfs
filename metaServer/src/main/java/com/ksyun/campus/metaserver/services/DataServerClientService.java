@@ -9,6 +9,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.List;
@@ -44,7 +45,6 @@ public class DataServerClientService {
             String url = "http://" + replicaData.dsNode + "/create";
             
             HttpHeaders headers = new HttpHeaders();
-            headers.set("fileSystemName", "minfs");
             
             // 构建请求参数
             String path = replicaData.path;
@@ -84,7 +84,6 @@ public class DataServerClientService {
             String url = "http://" + replicaData.dsNode + "/mkdir";
             
             HttpHeaders headers = new HttpHeaders();
-            headers.set("fileSystemName", "minfs");
             
             // 构建请求参数
             String path = replicaData.path;
@@ -124,7 +123,6 @@ public class DataServerClientService {
             String url = "http://" + replicaData.dsNode + "/delete";
             
             HttpHeaders headers = new HttpHeaders();
-            headers.set("fileSystemName", "minfs");
             
             // 构建请求参数
             String path = replicaData.path;
@@ -197,14 +195,13 @@ public class DataServerClientService {
     /**
      * 向DataServer写入文件数据
      * @param dataServer 选中的DataServer
-     * @param fileSystemName 文件系统名称
      * @param path 文件路径
      * @param offset 偏移量
      * @param length 长度
      * @param data 文件数据
      * @return 写入结果，包含副本位置信息
      */
-    public Map<String, Object> writeToDataServer(Object dataServer, String fileSystemName, String path, int offset, int length, byte[] data) {
+    public Map<String, Object> writeToDataServer(Object dataServer, String path, int offset, int length, byte[] data) {
         try {
             // 从dataServer对象中提取地址信息
             String dsAddress = extractDataServerAddress(dataServer);
@@ -215,22 +212,21 @@ public class DataServerClientService {
             String url = "http://" + dsAddress + "/write";
             
             HttpHeaders headers = new HttpHeaders();
-            headers.set("fileSystemName", fileSystemName);
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
             
             // 构建请求参数
             String queryParams = String.format("?path=%s&offset=%d&length=%d", path, offset, length);
             
-            // 发送写入请求
-            ResponseEntity<Map> response = restTemplate.exchange(
+            // 发送写入请求（以字符串接收，避免自动JSON转换触发Jackson版本冲突）
+            ResponseEntity<String> response = restTemplate.exchange(
                 url + queryParams,
                 HttpMethod.POST,
                 new HttpEntity<>(data, headers),
-                Map.class
+                String.class
             );
-            
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> result = response.getBody();
+                String body = response.getBody();
+                Map<String, Object> result = new ObjectMapper().readValue(body, Map.class);
                 log.info("成功在DataServer写入文件: {} -> {}, 副本位置: {}", 
                          dsAddress, path, result.get("replicaLocations"));
                 dataServerStatus.put(dsAddress, true);
@@ -260,8 +256,19 @@ public class DataServerClientService {
         if (dataServer instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> serverMap = (Map<String, Object>) dataServer;
-            String ip = (String) serverMap.get("ip");
+            // 优先使用已经拼好的address
+            Object address = serverMap.get("address");
+            if (address != null) {
+                return String.valueOf(address);
+            }
+            // 其次尝试host+port
+            String host = (String) serverMap.get("host");
             Object port = serverMap.get("port");
+            if (host != null && port != null) {
+                return host + ":" + port.toString();
+            }
+            // 兼容旧字段ip+port
+            String ip = (String) serverMap.get("ip");
             if (ip != null && port != null) {
                 return ip + ":" + port.toString();
             }

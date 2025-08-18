@@ -23,7 +23,7 @@ public class FsckServices {
     @Autowired
     private MetadataStorageService metadataStorage;
     
-    // 存储FSCK检查结果
+    // 存储FSCK检查结果（全局）
     private final Map<String, Object> fsckResults = new ConcurrentHashMap<>();
     
     /**
@@ -32,41 +32,31 @@ public class FsckServices {
     @Scheduled(fixedRate = 120000)
     public void scheduledFsck() {
         log.info("开始定时FSCK检查");
-        // 默认检查所有文件系统
-        List<String> fileSystems = metadataStorage.getFileSystemList();
-        if (fileSystems.isEmpty()) {
-            // 如果没有文件系统，使用默认名称
-            performFsck("default");
-        } else {
-            // 检查所有文件系统
-            for (String fileSystemName : fileSystems) {
-                performFsck(fileSystemName);
-            }
-        }
+        performFsck();
     }
     
     /**
      * 手动触发FSCK检查
      */
-    public void manualFsck(String fileSystemName) {
-        log.info("开始手动FSCK检查: fileSystemName={}", fileSystemName);
-        performFsck(fileSystemName);
+    public void manualFsck() {
+        log.info("开始手动FSCK检查");
+        performFsck();
     }
     
     /**
      * 执行FSCK检查
      */
-    private void performFsck(String fileSystemName) {
+    private void performFsck() {
         long startTime = System.currentTimeMillis();
         Map<String, Object> results = new HashMap<>();
         
         try {
             // 检查所有文件
-            List<StatInfo> allFiles = metaService.getAllFiles(fileSystemName);
+            List<StatInfo> allFiles = metaService.getAllFiles();
             int totalFiles = allFiles.size();
             int orphanedFiles = 0;
             
-            log.info("开始检查文件系统 {} 中的 {} 个文件", fileSystemName, totalFiles);
+            log.info("开始检查所有文件，共 {} 个", totalFiles);
             
             // 检查孤儿文件（元数据存在但副本信息不完整）
             for (StatInfo statInfo : allFiles) {
@@ -80,26 +70,24 @@ public class FsckServices {
             long endTime = System.currentTimeMillis();
             long duration = endTime - startTime;
             
-            results.put("fileSystemName", fileSystemName);
             results.put("totalFiles", totalFiles);
             results.put("orphanedFiles", orphanedFiles);
             results.put("checkDuration", duration + "ms");
             results.put("status", "completed");
             results.put("timestamp", new Date());
             
-            log.info("文件系统 {} FSCK检查完成: 总文件数={}, 孤儿文件数={}, 耗时={}ms", 
-                    fileSystemName, totalFiles, orphanedFiles, duration);
+            log.info("FSCK检查完成: 总文件数={}, 孤儿文件数={}, 耗时={}ms", 
+                    totalFiles, orphanedFiles, duration);
             
         } catch (Exception e) {
-            log.error("文件系统 {} FSCK检查异常", fileSystemName, e);
-            results.put("fileSystemName", fileSystemName);
+            log.error("FSCK检查异常", e);
             results.put("status", "error");
             results.put("error", e.getMessage());
             results.put("timestamp", new Date());
         }
         
         // 保存检查结果
-        fsckResults.put(fileSystemName, results);
+        fsckResults.put("global", results);
     }
     
     /**
@@ -124,8 +112,8 @@ public class FsckServices {
     /**
      * 获取FSCK检查结果
      */
-    public Map<String, Object> getFsckResults(String fileSystemName) {
-        return (Map<String, Object>) fsckResults.getOrDefault(fileSystemName, new HashMap<>());
+    public Map<String, Object> getFsckResults() {
+        return (Map<String, Object>) fsckResults.getOrDefault("global", new HashMap<>());
     }
     
     /**
@@ -138,12 +126,8 @@ public class FsckServices {
     /**
      * 清理FSCK检查结果
      */
-    public void clearFsckResults(String fileSystemName) {
-        if (fileSystemName != null) {
-            fsckResults.remove(fileSystemName);
-        } else {
-            fsckResults.clear();
-        }
+    public void clearFsckResults() {
+        fsckResults.clear();
     }
 }
 

@@ -1,0 +1,60 @@
+server:
+  port: 8001
+
+spring:
+  application:
+    name: minfs-metaserver-8001
+
+metaserver:
+  host: localhost
+  zk:
+    connect:
+      string: localhost:2181
+    root:
+      path: /minfs
+  cluster:
+    role: slave
+    election:
+      enabled: true
+    heartbeat:
+      interval: 10000  # 10秒心跳间隔
+      timeout: 30000   # 30秒超时
+
+logging:
+  level:
+    com.ksyun.campus.metaserver: INFO
+    org.apache.zookeeper: WARN
+  file:
+    name: ./logs/metaserver-8001.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 元数据存储配置
+metadata:
+  storage:
+    type: rocksdb
+    path: ./data/metaserver-8001/rocksdb
+    backup:
+      enabled: true
+      path: ./data/metaserver-8001/backup
+      interval: 300000  # 5分钟备份间隔
+
+# 集群配置
+cluster:
+  metaserver:
+    nodes:
+      - host: localhost
+        port: 8000
+        role: master
+      - host: localhost
+        port: 8001
+        role: slave
+      - host: localhost
+        port: 8002
+        role: slave
+  dataserver:
+    min-replicas: 3
+    heartbeat:
+      interval: 10000
+      timeout: 30000

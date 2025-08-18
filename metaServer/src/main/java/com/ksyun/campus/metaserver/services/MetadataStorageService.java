@@ -25,8 +25,8 @@ public class MetadataStorageService {
     @Value("${metadata.storage.path:./rocksdb_metadata}")
     private String dbPath;
     
-    // 缓存文件系统信息
-    private final Map<String, Set<String>> fileSystemPaths = new ConcurrentHashMap<>();
+    // 缓存全局路径集合（不再区分文件系统）
+    private final Set<String> allPaths = ConcurrentHashMap.newKeySet();
     
     @PostConstruct
     public void init() {
@@ -67,24 +67,19 @@ public class MetadataStorageService {
      */
     private void rebuildFileSystemCache() {
         try {
-            fileSystemPaths.clear();
+            allPaths.clear();
             RocksIterator iterator = rocksDB.newIterator();
             iterator.seekToFirst();
             
             while (iterator.isValid()) {
                 String key = new String(iterator.key(), StandardCharsets.UTF_8);
-                // 键格式: fileSystemName:path
-                String[] parts = key.split(":", 2);
-                if (parts.length == 2) {
-                    String fileSystemName = parts[0];
-                    String path = parts[1];
-                    fileSystemPaths.computeIfAbsent(fileSystemName, k -> new HashSet<>()).add(path);
-                }
+                // 现在键即为路径
+                allPaths.add(key);
                 iterator.next();
             }
             iterator.close();
             
-            log.info("文件系统路径缓存重建完成，共 {} 个文件系统", fileSystemPaths.size());
+            log.info("路径缓存重建完成，共 {} 条路径", allPaths.size());
         } catch (Exception e) {
             log.error("重建文件系统路径缓存失败", e);
         }
@@ -93,21 +88,21 @@ public class MetadataStorageService {
     /**
      * 保存元数据
      */
-    public void saveMetadata(String fileSystemName, String path, StatInfo statInfo) {
+    public void saveMetadata(String path, StatInfo statInfo) {
         try {
-            String key = fileSystemName + ":" + path;
+            String key = path;
             String json = objectMapper.writeValueAsString(statInfo);
             byte[] value = json.getBytes(StandardCharsets.UTF_8);
             
             rocksDB.put(key.getBytes(StandardCharsets.UTF_8), value);
             
             // 更新缓存
-            fileSystemPaths.computeIfAbsent(fileSystemName, k -> new HashSet<>()).add(path);
+            allPaths.add(path);
             
             log.debug("保存元数据成功: {} -> {}", key, statInfo.getPath());
             
         } catch (Exception e) {
-            log.error("保存元数据失败: {}:{}", fileSystemName, path, e);
+            log.error("保存元数据失败: {}", path, e);
             throw new RuntimeException("保存元数据失败", e);
         }
     }
@@ -115,9 +110,9 @@ public class MetadataStorageService {
     /**
      * 获取元数据
      */
-    public StatInfo getMetadata(String fileSystemName, String path) {
+    public StatInfo getMetadata(String path) {
         try {
-            String key = fileSystemName + ":" + path;
+            String key = path;
             byte[] value = rocksDB.get(key.getBytes(StandardCharsets.UTF_8));
             
             if (value == null) {
@@ -131,7 +126,7 @@ public class MetadataStorageService {
             return statInfo;
             
         } catch (Exception e) {
-            log.error("获取元数据失败: {}:{}", fileSystemName, path, e);
+            log.error("获取元数据失败: {}", path, e);
             return null;
         }
     }
@@ -139,13 +134,13 @@ public class MetadataStorageService {
     /**
      * 检查路径是否存在
      */
-    public boolean exists(String fileSystemName, String path) {
+    public boolean exists(String path) {
         try {
-            String key = fileSystemName + ":" + path;
+            String key = path;
             byte[] value = rocksDB.get(key.getBytes(StandardCharsets.UTF_8));
             return value != null;
         } catch (Exception e) {
-            log.error("检查路径存在性失败: {}:{}", fileSystemName, path, e);
+            log.error("检查路径存在性失败: {}", path, e);
             return false;
         }
     }
@@ -153,24 +148,19 @@ public class MetadataStorageService {
     /**
      * 列出目录内容
      */
-    public List<StatInfo> listDirectory(String fileSystemName, String parentPath) {
+    public List<StatInfo> listDirectory(String parentPath) {
         List<StatInfo> children = new ArrayList<>();
         
         try {
-            Set<String> paths = fileSystemPaths.get(fileSystemName);
-            if (paths == null) {
-                return children;
-            }
-            
             String parentPathWithSlash = parentPath.endsWith("/") ? parentPath : parentPath + "/";
             
-            for (String path : paths) {
+            for (String path : allPaths) {
                 if (path.startsWith(parentPathWithSlash) && !path.equals(parentPathWithSlash)) {
                     // 检查是否是直接子项（不是孙子项）
                     String relativePath = path.substring(parentPathWithSlash.length());
                     if (!relativePath.contains("/")) {
                         // 直接子项
-                        StatInfo statInfo = getMetadata(fileSystemName, path);
+                        StatInfo statInfo = getMetadata(path);
                         if (statInfo != null) {
                             children.add(statInfo);
                         }
@@ -178,10 +168,10 @@ public class MetadataStorageService {
                 }
             }
             
-            log.debug("列出目录内容: {}:{} -> {} 个项目", fileSystemName, parentPath, children.size());
+            log.debug("列出目录内容: {} -> {} 个项目", parentPath, children.size());
             
         } catch (Exception e) {
-            log.error("列出目录内容失败: {}:{}", fileSystemName, parentPath, e);
+            log.error("列出目录内容失败: {}", parentPath, e);
         }
         
         return children;
@@ -190,21 +180,18 @@ public class MetadataStorageService {
     /**
      * 删除元数据
      */
-    public void deleteMetadata(String fileSystemName, String path) {
+    public void deleteMetadata(String path) {
         try {
-            String key = fileSystemName + ":" + path;
+            String key = path;
             rocksDB.delete(key.getBytes(StandardCharsets.UTF_8));
             
             // 更新缓存
-            Set<String> paths = fileSystemPaths.get(fileSystemName);
-            if (paths != null) {
-                paths.remove(path);
-            }
+            allPaths.remove(path);
             
-            log.debug("删除元数据成功: {}:{}", fileSystemName, path);
+            log.debug("删除元数据成功: {}", path);
             
         } catch (Exception e) {
-            log.error("删除元数据失败: {}:{}", fileSystemName, path, e);
+            log.error("删除元数据失败: {}", path, e);
             throw new RuntimeException("删除元数据失败", e);
         }
     }
@@ -212,60 +199,40 @@ public class MetadataStorageService {
     /**
      * 获取所有元数据
      */
-    public List<StatInfo> getAllMetadata(String fileSystemName) {
+    public List<StatInfo> getAllMetadata() {
         List<StatInfo> allMetadata = new ArrayList<>();
         
         try {
-            Set<String> paths = fileSystemPaths.get(fileSystemName);
-            if (paths == null) {
-                return allMetadata;
-            }
-            
-            for (String path : paths) {
-                StatInfo statInfo = getMetadata(fileSystemName, path);
+            for (String path : allPaths) {
+                StatInfo statInfo = getMetadata(path);
                 if (statInfo != null) {
                     allMetadata.add(statInfo);
                 }
             }
             
-            log.debug("获取所有元数据: {} -> {} 个项目", fileSystemName, allMetadata.size());
+            log.debug("获取所有元数据: {} 个项目", allMetadata.size());
             
         } catch (Exception e) {
-            log.error("获取所有元数据失败: {}", fileSystemName, e);
+            log.error("获取所有元数据失败", e);
         }
         
         return allMetadata;
     }
     
-    /**
-     * 批量删除文件系统下的所有元数据
-     */
-    public void deleteFileSystem(String fileSystemName) {
+    // 兼容旧接口：删除全部元数据
+    public void deleteAll() {
         try {
-            Set<String> paths = fileSystemPaths.get(fileSystemName);
-            if (paths == null) {
-                return;
-            }
-            
-            log.info("开始删除文件系统: {}, 包含 {} 个项目", fileSystemName, paths.size());
-            
             try (WriteBatch writeBatch = new WriteBatch()) {
-                for (String path : paths) {
-                    String key = fileSystemName + ":" + path;
-                    writeBatch.delete(key.getBytes(StandardCharsets.UTF_8));
+                for (String path : allPaths) {
+                    writeBatch.delete(path.getBytes(StandardCharsets.UTF_8));
                 }
-                
                 rocksDB.write(new WriteOptions(), writeBatch);
             }
-            
-            // 清理缓存
-            fileSystemPaths.remove(fileSystemName);
-            
-            log.info("文件系统删除完成: {}", fileSystemName);
-            
+            allPaths.clear();
+            log.info("已删除所有元数据");
         } catch (Exception e) {
-            log.error("删除文件系统失败: {}", fileSystemName, e);
-            throw new RuntimeException("删除文件系统失败", e);
+            log.error("删除所有元数据失败", e);
+            throw new RuntimeException("删除所有元数据失败", e);
         }
     }
     
@@ -277,11 +244,7 @@ public class MetadataStorageService {
         
         try {
             stats.put("dbPath", dbPath);
-            stats.put("totalFileSystems", String.valueOf(fileSystemPaths.size()));
-            
-            long totalFiles = fileSystemPaths.values().stream()
-                    .mapToLong(Set::size)
-                    .sum();
+            long totalFiles = allPaths.size();
             stats.put("totalFiles", String.valueOf(totalFiles));
             
             // 获取RocksDB统计信息
@@ -292,62 +255,6 @@ public class MetadataStorageService {
             
         } catch (Exception e) {
             log.error("获取存储统计信息失败", e);
-            stats.put("error", e.getMessage());
-        }
-        
-        return stats;
-    }
-    
-    /**
-     * 获取文件系统列表
-     */
-    public List<String> getFileSystemList() {
-        return new ArrayList<>(fileSystemPaths.keySet());
-    }
-    
-    /**
-     * 获取文件系统统计信息
-     */
-    public Map<String, Object> getFileSystemStats(String fileSystemName) {
-        Map<String, Object> stats = new HashMap<>();
-        
-        try {
-            Set<String> paths = fileSystemPaths.get(fileSystemName);
-            if (paths == null) {
-                stats.put("fileSystemName", fileSystemName);
-                stats.put("totalFiles", 0);
-                stats.put("totalDirectories", 0);
-                stats.put("totalRegularFiles", 0);
-                stats.put("totalSize", 0);
-                return stats;
-            }
-            
-            int totalFiles = 0;
-            int totalDirectories = 0;
-            int totalRegularFiles = 0;
-            long totalSize = 0;
-            
-            for (String path : paths) {
-                StatInfo statInfo = getMetadata(fileSystemName, path);
-                if (statInfo != null) {
-                    totalFiles++;
-                    if (statInfo.getType().getCode() == 1) { // Directory
-                        totalDirectories++;
-                    } else if (statInfo.getType().getCode() == 2) { // File
-                        totalRegularFiles++;
-                        totalSize += statInfo.getSize();
-                    }
-                }
-            }
-            
-            stats.put("fileSystemName", fileSystemName);
-            stats.put("totalFiles", totalFiles);
-            stats.put("totalDirectories", totalDirectories);
-            stats.put("totalRegularFiles", totalRegularFiles);
-            stats.put("totalSize", totalSize);
-            
-        } catch (Exception e) {
-            log.error("获取文件系统统计信息失败: {}", fileSystemName, e);
             stats.put("error", e.getMessage());
         }
         

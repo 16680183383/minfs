@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -24,43 +23,23 @@ public class MetaService {
     @Autowired
     private DataServerClientService dataServerClient;
     
-
-    
-    // 内存中存储文件元数据（按文件系统名称隔离）
-    private final Map<String, Map<String, StatInfo>> fileMetadataByFileSystem = new ConcurrentHashMap<>();
-    
-    // 每个文件系统的副本计数器
-    private final Map<String, AtomicInteger> replicaCounters = new ConcurrentHashMap<>();
-    
-    /**
-     * 获取文件系统的元数据缓存
-     */
-    private Map<String, StatInfo> getFileMetadata(String fileSystemName) {
-        return fileMetadataByFileSystem.computeIfAbsent(fileSystemName, k -> new ConcurrentHashMap<>());
-    }
-    
-    /**
-     * 获取文件系统的副本计数器
-     */
-    private AtomicInteger getReplicaCounter(String fileSystemName) {
-        return replicaCounters.computeIfAbsent(fileSystemName, k -> new AtomicInteger(0));
-    }
+    // 简单轮询计数器（全局）
+    private final AtomicInteger roundRobinCounter = new AtomicInteger(0);
     
     /**
      * 选择数据服务器（负载均衡）
      */
-    public Object pickDataServer(String fileSystemName) {
+    public Object pickDataServer() {
         // 从ZK中获取活跃的数据服务器
         List<Map<String, Object>> activeServers = zkDataServerService.getActiveDataServers();
         
         if (activeServers.isEmpty()) {
-            log.warn("文件系统 {} 没有可用的数据服务器", fileSystemName);
+            log.warn("没有可用的数据服务器");
             return null;
         }
         
         // 使用轮询策略选择数据服务器
-        AtomicInteger counter = getReplicaCounter(fileSystemName);
-        int index = counter.getAndIncrement() % activeServers.size();
+        int index = Math.floorMod(roundRobinCounter.getAndIncrement(), activeServers.size());
         return activeServers.get(index);
     }
     
@@ -69,18 +48,18 @@ public class MetaService {
     /**
      * 创建文件或目录
      */
-    public StatInfo createFile(String fileSystemName, String path, FileType type) {
+    public StatInfo createFile(String path, FileType type) {
         // 检查路径是否已存在
-        if (metadataStorage.exists(fileSystemName, path)) {
-            log.warn("文件系统 {} 中文件/目录已存在: {}", fileSystemName, path);
-            return getFile(fileSystemName, path);
+        if (metadataStorage.exists(path)) {
+            log.warn("文件/目录已存在: {}", path);
+            return getFile(path);
         }
         
         // 确保父目录存在
         String parentPath = getParentPath(path);
-        if (!parentPath.equals("/") && !metadataStorage.exists(fileSystemName, parentPath)) {
-            log.warn("文件系统 {} 中父目录不存在，先创建父目录: {}", fileSystemName, parentPath);
-            createFile(fileSystemName, parentPath, FileType.Directory);
+        if (!parentPath.equals("/") && !metadataStorage.exists(parentPath)) {
+            log.warn("父目录不存在，先创建父目录: {}", parentPath);
+            createFile(parentPath, FileType.Directory);
         }
         
         StatInfo statInfo = new StatInfo();
@@ -90,35 +69,33 @@ public class MetaService {
         statInfo.setType(type);
         
         // 保存到RocksDB和内存缓存
-        metadataStorage.saveMetadata(fileSystemName, path, statInfo);
-        Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-        fileMetadata.put(path, statInfo);
+        metadataStorage.saveMetadata(path, statInfo);
         
-        log.info("文件系统 {} 创建文件/目录: {}, 类型: {}", fileSystemName, path, type);
+        log.info("创建文件/目录: {}, 类型: {}", path, type);
         return statInfo;
     }
     
     /**
      * 写入文件数据到DataServer并记录副本位置
      */
-    public StatInfo writeFile(String fileSystemName, String path, byte[] data, int offset, int length) {
+    public StatInfo writeFile(String path, byte[] data, int offset, int length) {
         try {
             // 1. 检查文件是否存在，不存在则创建
-            StatInfo statInfo = getFile(fileSystemName, path);
+            StatInfo statInfo = getFile(path);
             if (statInfo == null) {
-                log.info("文件系统 {} 中文件不存在，先创建文件: {}", fileSystemName, path);
-                statInfo = createFile(fileSystemName, path, FileType.File);
+                log.info("文件不存在，先创建文件: {}", path);
+                statInfo = createFile(path, FileType.File);
             }
             
             // 2. 选择DataServer进行写入
-            Object selectedDataServer = pickDataServer(fileSystemName);
+            Object selectedDataServer = pickDataServer();
             if (selectedDataServer == null) {
                 throw new RuntimeException("没有可用的DataServer");
             }
             
             // 3. 调用DataServer的write接口
             Map<String, Object> writeResult = dataServerClient.writeToDataServer(
-                selectedDataServer, fileSystemName, path, offset, length, data);
+                selectedDataServer, path, offset, length, data);
             
             if (!(Boolean) writeResult.get("success")) {
                 throw new RuntimeException("DataServer写入失败: " + writeResult.get("message"));
@@ -137,18 +114,16 @@ public class MetaService {
                 statInfo.setMtime(System.currentTimeMillis());
                 
                 // 保存更新后的元数据
-                metadataStorage.saveMetadata(fileSystemName, path, statInfo);
-                Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-                fileMetadata.put(path, statInfo);
+                metadataStorage.saveMetadata(path, statInfo);
                 
-                log.info("文件系统 {} 写入文件成功: {}, 大小: {}, 副本位置: {}", 
-                        fileSystemName, path, statInfo.getSize(), replicaLocations);
+                log.info("写入文件成功: {}, 大小: {}, 副本位置: {}", 
+                        path, statInfo.getSize(), replicaLocations);
             }
             
             return statInfo;
             
         } catch (Exception e) {
-            log.error("文件系统 {} 写入文件失败: {}", fileSystemName, path, e);
+            log.error("写入文件失败: {}", path, e);
             throw new RuntimeException("写入文件失败: " + e.getMessage(), e);
         }
     }
@@ -182,25 +157,17 @@ public class MetaService {
     /**
      * 获取文件信息
      */
-    public StatInfo getFile(String fileSystemName, String path) {
+    public StatInfo getFile(String path) {
         // 先从内存缓存获取，如果没有则从RocksDB获取
-        Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-        StatInfo statInfo = fileMetadata.get(path);
-        if (statInfo == null) {
-            statInfo = metadataStorage.getMetadata(fileSystemName, path);
-            if (statInfo != null) {
-                fileMetadata.put(path, statInfo); // 更新缓存
-            }
-        }
-        return statInfo;
+        return metadataStorage.getMetadata(path);
     }
     
     /**
      * 列出目录内容
      */
-    public List<StatInfo> listFiles(String fileSystemName, String parentPath) {
+    public List<StatInfo> listFiles(String parentPath) {
         // 使用RocksDB的目录列表功能
-        return metadataStorage.listDirectory(fileSystemName, parentPath);
+        return metadataStorage.listDirectory(parentPath);
     }
     
     /**
@@ -220,36 +187,34 @@ public class MetaService {
     /**
      * 删除文件或目录（支持递归删除非空目录）
      */
-    public boolean deleteFile(String fileSystemName, String path) {
-        StatInfo statInfo = getFile(fileSystemName, path);
+    public boolean deleteFile(String path) {
+        StatInfo statInfo = getFile(path);
         if (statInfo == null) {
-            log.warn("文件系统 {} 中文件/目录不存在: {}", fileSystemName, path);
+            log.warn("文件/目录不存在: {}", path);
             return false;
         }
         
         try {
             if (statInfo.getType() == FileType.Directory) {
                 // 目录删除，先递归删除子文件
-                log.info("文件系统 {} 开始递归删除目录: {}", fileSystemName, path);
-                boolean recursiveDeleteSuccess = deleteDirectoryRecursively(fileSystemName, path);
+                log.info("开始递归删除目录: {}", path);
+                boolean recursiveDeleteSuccess = deleteDirectoryRecursively(path);
                 if (!recursiveDeleteSuccess) {
-                    log.error("文件系统 {} 递归删除目录失败: {}", fileSystemName, path);
+                    log.error("递归删除目录失败: {}", path);
                     return false;
                 }
             } else {
                 // 文件删除：DataServer会自动管理副本删除，这里只删除元数据
-                log.info("文件系统 {} 删除文件: {}, 元数据删除", fileSystemName, path);
+                log.info("删除文件: {}, 元数据删除", path);
             }
             
             // 删除成功后，从RocksDB和内存缓存中删除元数据
-            metadataStorage.deleteMetadata(fileSystemName, path);
-            Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-            fileMetadata.remove(path);
-            log.info("文件系统 {} 成功删除文件/目录: {}", fileSystemName, path);
+            metadataStorage.deleteMetadata(path);
+            log.info("成功删除文件/目录: {}", path);
             return true;
             
         } catch (Exception e) {
-            log.error("文件系统 {} 删除文件/目录异常: {}", fileSystemName, path, e);
+            log.error("删除文件/目录异常: {}", path, e);
             return false;
         }
     }
@@ -257,24 +222,24 @@ public class MetaService {
     /**
      * 递归删除目录及其所有内容
      */
-    private boolean deleteDirectoryRecursively(String fileSystemName, String dirPath) {
+    private boolean deleteDirectoryRecursively(String dirPath) {
         try {
-            List<StatInfo> children = listFiles(fileSystemName, dirPath);
+            List<StatInfo> children = listFiles(dirPath);
             if (children.isEmpty()) {
-                log.debug("文件系统 {} 中目录为空，直接删除: {}", fileSystemName, dirPath);
+                log.debug("目录为空，直接删除: {}", dirPath);
                 return true;
             }
             
-            log.info("文件系统 {} 中目录 {} 包含 {} 个子项，开始递归删除", 
-                    fileSystemName, dirPath, children.size());
+            log.info("目录 {} 包含 {} 个子项，开始递归删除", 
+                    dirPath, children.size());
             
             // 先删除所有子项
             for (StatInfo child : children) {
                 String childPath = child.getPath();
                 if (child.getType() == FileType.Directory) {
                     // 递归删除子目录
-                    if (!deleteDirectoryRecursively(fileSystemName, childPath)) {
-                        log.error("文件系统 {} 递归删除子目录失败: {}", fileSystemName, childPath);
+                    if (!deleteDirectoryRecursively(childPath)) {
+                        log.error("递归删除子目录失败: {}", childPath);
                         return false;
                     }
                 } else {
@@ -282,22 +247,20 @@ public class MetaService {
                     List<ReplicaData> replicas = child.getReplicaData();
                     if (replicas != null && !replicas.isEmpty()) {
                         int deletedCount = dataServerClient.deleteFromMultipleDataServers(replicas);
-                        log.info("文件系统 {} 删除子文件: {}, 在DataServer上成功删除: {}/{}", 
-                                fileSystemName, childPath, deletedCount, replicas.size());
+                        log.info("删除子文件: {}, 在DataServer上成功删除: {}/{}", 
+                                childPath, deletedCount, replicas.size());
                     }
                 }
                 
                 // 删除子项的元数据
-                metadataStorage.deleteMetadata(fileSystemName, childPath);
-                Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-                fileMetadata.remove(childPath);
+                metadataStorage.deleteMetadata(childPath);
             }
             
-            log.info("文件系统 {} 中目录 {} 的所有子项删除完成", fileSystemName, dirPath);
+            log.info("目录 {} 的所有子项删除完成", dirPath);
             return true;
             
         } catch (Exception e) {
-            log.error("文件系统 {} 递归删除目录异常: {}", fileSystemName, dirPath, e);
+            log.error("递归删除目录异常: {}", dirPath, e);
             return false;
         }
     }
@@ -316,8 +279,8 @@ public class MetaService {
     /**
      * 获取所有文件元数据
      */
-    public List<StatInfo> getAllFiles(String fileSystemName) {
-        return metadataStorage.getAllMetadata(fileSystemName);
+    public List<StatInfo> getAllFiles() {
+        return metadataStorage.getAllMetadata();
     }
     
     /**
@@ -337,36 +300,36 @@ public class MetaService {
     /**
      * 检查文件是否存在
      */
-    public boolean fileExists(String fileSystemName, String path) {
-        return metadataStorage.exists(fileSystemName, path);
+    public boolean fileExists(String path) {
+        return metadataStorage.exists(path);
     }
     
     /**
      * 获取文件状态信息
      */
-    public StatInfo getFileStatus(String fileSystemName, String path) {
-        return getFile(fileSystemName, path);
+    public StatInfo getFileStatus(String path) {
+        return getFile(path);
     }
     
     /**
      * 创建目录
      */
-    public StatInfo createDirectory(String fileSystemName, String path) {
-        return createFile(fileSystemName, path, FileType.Directory);
+    public StatInfo createDirectory(String path) {
+        return createFile(path, FileType.Directory);
     }
     
     /**
      * 重命名文件或目录
      */
-    public boolean renameFile(String fileSystemName, String oldPath, String newPath) {
-        StatInfo statInfo = getFile(fileSystemName, oldPath);
+    public boolean renameFile(String oldPath, String newPath) {
+        StatInfo statInfo = getFile(oldPath);
         if (statInfo == null) {
-            log.warn("文件系统 {} 中源文件/目录不存在: {}", fileSystemName, oldPath);
+            log.warn("源文件/目录不存在: {}", oldPath);
             return false;
         }
         
-        if (metadataStorage.exists(fileSystemName, newPath)) {
-            log.warn("文件系统 {} 中目标路径已存在: {}", fileSystemName, newPath);
+        if (metadataStorage.exists(newPath)) {
+            log.warn("目标路径已存在: {}", newPath);
             return false;
         }
         
@@ -379,14 +342,12 @@ public class MetaService {
         newStatInfo.setReplicaData(statInfo.getReplicaData());
         
         // 保存新路径的元数据
-        metadataStorage.saveMetadata(fileSystemName, newPath, newStatInfo);
-        Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-        fileMetadata.put(newPath, newStatInfo);
+        metadataStorage.saveMetadata(newPath, newStatInfo);
         
         // 删除旧路径的元数据
-        deleteFile(fileSystemName, oldPath);
+        deleteFile(oldPath);
         
-        log.info("文件系统 {} 重命名文件/目录: {} -> {}", fileSystemName, oldPath, newPath);
+        log.info("重命名文件/目录: {} -> {}", oldPath, newPath);
         return true;
     }
     
@@ -400,24 +361,19 @@ public class MetaService {
     /**
      * 获取文件系统统计信息
      */
-    public Map<String, Object> getFileSystemStats(String fileSystemName) {
+    public Map<String, Object> getGlobalStats() {
         Map<String, Object> stats = new HashMap<>();
-        Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-        
-        stats.put("fileSystemName", fileSystemName);
-        stats.put("totalFiles", fileMetadata.size());
-        stats.put("totalDirectories", (int) fileMetadata.values().stream()
+        List<StatInfo> allFiles = metadataStorage.getAllMetadata();
+        stats.put("totalFiles", allFiles.size());
+        stats.put("totalDirectories", (int) allFiles.stream()
                 .filter(f -> f.getType() == FileType.Directory).count());
-        stats.put("totalRegularFiles", (int) fileMetadata.values().stream()
+        stats.put("totalRegularFiles", (int) allFiles.stream()
                 .filter(f -> f.getType() == FileType.File).count());
-        
-        // 计算总存储大小
-        long totalSize = fileMetadata.values().stream()
+        long totalSize = allFiles.stream()
                 .filter(f -> f.getType() == FileType.File)
                 .mapToLong(StatInfo::getSize)
                 .sum();
         stats.put("totalSize", totalSize);
-        
         return stats;
     }
 }
