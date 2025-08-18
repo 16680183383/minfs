@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -24,6 +25,9 @@ public class DataServerClientService {
     @Autowired
     private RestTemplate restTemplate;
     
+    @Autowired
+    private ZkDataServerService zkDataServerService;
+    
     // 线程池用于并发调用DataServer接口
     private final ExecutorService executorService = Executors.newFixedThreadPool(10);
     
@@ -31,16 +35,13 @@ public class DataServerClientService {
     private final Map<String, Boolean> dataServerStatus = new ConcurrentHashMap<>();
     
     /**
-     * 向DataServer写入文件数据
+     * 创建文件时通知DataServer创建目录结构
      * @param replicaData 副本信息
-     * @param data 文件数据
-     * @param offset 偏移量
-     * @param length 长度
      * @return 是否成功
      */
-    public boolean writeToDataServer(ReplicaData replicaData, byte[] data, int offset, int length) {
+    public boolean createFileOnDataServer(ReplicaData replicaData) {
         try {
-            String url = "http://" + replicaData.dsNode + "/write";
+            String url = "http://" + replicaData.dsNode + "/create";
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("fileSystemName", "minfs");
@@ -48,41 +49,39 @@ public class DataServerClientService {
             // 构建请求参数
             String path = replicaData.path;
             
-            // 发送写入请求
+            // 发送创建请求
             ResponseEntity<String> response = restTemplate.exchange(
-                url + "?path=" + path + "&offset=" + offset + "&length=" + length,
+                url + "?path=" + path,
                 HttpMethod.POST,
-                new HttpEntity<>(data, headers),
+                new HttpEntity<>(headers),
                 String.class
             );
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("成功写入DataServer: {} -> {}", replicaData.dsNode, path);
+                log.info("成功在DataServer创建文件: {} -> {}", replicaData.dsNode, path);
                 dataServerStatus.put(replicaData.dsNode, true);
                 return true;
             } else {
-                log.error("写入DataServer失败: {} -> {}, 状态码: {}", 
+                log.error("在DataServer创建文件失败: {} -> {}, 状态码: {}", 
                          replicaData.dsNode, path, response.getStatusCode());
                 return false;
             }
             
         } catch (Exception e) {
-            log.error("写入DataServer异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
+            log.error("在DataServer创建文件异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
             dataServerStatus.put(replicaData.dsNode, false);
             return false;
         }
     }
     
     /**
-     * 从DataServer读取文件数据
+     * 创建目录时通知DataServer创建目录结构
      * @param replicaData 副本信息
-     * @param offset 偏移量
-     * @param length 长度
-     * @return 文件数据
+     * @return 是否成功
      */
-    public byte[] readFromDataServer(ReplicaData replicaData, int offset, int length) {
+    public boolean createDirectoryOnDataServer(ReplicaData replicaData) {
         try {
-            String url = "http://" + replicaData.dsNode + "/read";
+            String url = "http://" + replicaData.dsNode + "/mkdir";
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("fileSystemName", "minfs");
@@ -90,37 +89,37 @@ public class DataServerClientService {
             // 构建请求参数
             String path = replicaData.path;
             
-            // 发送读取请求
-            ResponseEntity<byte[]> response = restTemplate.exchange(
-                url + "?path=" + path + "&offset=" + offset + "&length=" + length,
-                HttpMethod.GET,
+            // 发送创建目录请求
+            ResponseEntity<String> response = restTemplate.exchange(
+                url + "?path=" + path,
+                HttpMethod.POST,
                 new HttpEntity<>(headers),
-                byte[].class
+                String.class
             );
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("成功从DataServer读取: {} -> {}", replicaData.dsNode, path);
+                log.info("成功在DataServer创建目录: {} -> {}", replicaData.dsNode, path);
                 dataServerStatus.put(replicaData.dsNode, true);
-                return response.getBody();
+                return true;
             } else {
-                log.error("从DataServer读取失败: {} -> {}, 状态码: {}", 
+                log.error("在DataServer创建目录失败: {} -> {}, 状态码: {}", 
                          replicaData.dsNode, path, response.getStatusCode());
-                return null;
+                return false;
             }
             
         } catch (Exception e) {
-            log.error("从DataServer读取异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
+            log.error("在DataServer创建目录异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
             dataServerStatus.put(replicaData.dsNode, false);
-            return null;
+            return false;
         }
     }
     
     /**
-     * 删除DataServer上的文件
+     * 删除文件时通知DataServer删除实际数据
      * @param replicaData 副本信息
      * @return 是否成功
      */
-    public boolean deleteFromDataServer(ReplicaData replicaData) {
+    public boolean deleteFileFromDataServer(ReplicaData replicaData) {
         try {
             String url = "http://" + replicaData.dsNode + "/delete";
             
@@ -154,20 +153,19 @@ public class DataServerClientService {
     }
     
     /**
-     * 向多个DataServer并发写入数据（三副本同步）
+     * 向多个DataServer并发创建文件/目录
      * @param replicas 副本列表
-     * @param data 文件数据
-     * @param offset 偏移量
-     * @param length 长度
-     * @return 成功写入的副本数量
+     * @param isDirectory 是否为目录
+     * @return 成功创建的副本数量
      */
-    public int writeToMultipleDataServers(List<ReplicaData> replicas, byte[] data, int offset, int length) {
+    public int createOnMultipleDataServers(List<ReplicaData> replicas, boolean isDirectory) {
         List<CompletableFuture<Boolean>> futures = replicas.stream()
             .map(replica -> CompletableFuture.supplyAsync(() -> 
-                writeToDataServer(replica, data, offset, length), executorService))
+                isDirectory ? createDirectoryOnDataServer(replica) : createFileOnDataServer(replica), 
+                executorService))
             .toList();
         
-        // 等待所有写入完成
+        // 等待所有创建完成
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
             futures.toArray(new CompletableFuture[0])
         );
@@ -181,56 +179,139 @@ public class DataServerClientService {
                     try {
                         return future.get() ? 1 : 0;
                     } catch (Exception e) {
-                        log.error("获取写入结果异常", e);
+                        log.error("获取创建结果异常", e);
                         return 0;
                     }
                 })
                 .sum();
             
-            log.info("三副本写入完成: {}/{} 成功", successCount, replicas.size());
+            log.info("多副本创建完成: {}/{} 成功", successCount, replicas.size());
             return (int) successCount;
             
         } catch (Exception e) {
-            log.error("等待写入完成异常", e);
+            log.error("等待创建完成异常", e);
             return 0;
         }
     }
     
     /**
-     * 从多个DataServer读取数据（故障转移）
-     * @param replicas 副本列表
+     * 向DataServer写入文件数据
+     * @param dataServer 选中的DataServer
+     * @param fileSystemName 文件系统名称
+     * @param path 文件路径
      * @param offset 偏移量
      * @param length 长度
-     * @return 文件数据
+     * @param data 文件数据
+     * @return 写入结果，包含副本位置信息
      */
-    public byte[] readFromMultipleDataServers(List<ReplicaData> replicas, int offset, int length) {
-        // 优先尝试主副本
-        for (ReplicaData replica : replicas) {
-            if (replica.isPrimary) {
-                byte[] data = readFromDataServer(replica, offset, length);
-                if (data != null) {
-                    return data;
-                }
+    public Map<String, Object> writeToDataServer(Object dataServer, String fileSystemName, String path, int offset, int length, byte[] data) {
+        try {
+            // 从dataServer对象中提取地址信息
+            String dsAddress = extractDataServerAddress(dataServer);
+            if (dsAddress == null) {
+                throw new RuntimeException("无法获取DataServer地址");
+            }
+            
+            String url = "http://" + dsAddress + "/write";
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+            
+            // 构建请求参数
+            String queryParams = String.format("?path=%s&offset=%d&length=%d", path, offset, length);
+            
+            // 发送写入请求
+            ResponseEntity<Map> response = restTemplate.exchange(
+                url + queryParams,
+                HttpMethod.POST,
+                new HttpEntity<>(data, headers),
+                Map.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> result = response.getBody();
+                log.info("成功在DataServer写入文件: {} -> {}, 副本位置: {}", 
+                         dsAddress, path, result.get("replicaLocations"));
+                dataServerStatus.put(dsAddress, true);
+                return result;
+            } else {
+                log.error("在DataServer写入文件失败: {} -> {}, 状态码: {}", 
+                         dsAddress, path, response.getStatusCode());
+                Map<String, Object> errorResult = new HashMap<>();
+                errorResult.put("success", false);
+                errorResult.put("message", "写入失败，状态码: " + response.getStatusCode());
+                return errorResult;
+            }
+            
+        } catch (Exception e) {
+            log.error("在DataServer写入文件异常: {} -> {}", path, e.getMessage(), e);
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("success", false);
+            errorResult.put("message", "写入异常: " + e.getMessage());
+            return errorResult;
+        }
+    }
+    
+    /**
+     * 从dataServer对象中提取地址信息
+     */
+    private String extractDataServerAddress(Object dataServer) {
+        if (dataServer instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> serverMap = (Map<String, Object>) dataServer;
+            String ip = (String) serverMap.get("ip");
+            Object port = serverMap.get("port");
+            if (ip != null && port != null) {
+                return ip + ":" + port.toString();
             }
         }
-        
-        // 主副本失败，尝试其他副本
-        for (ReplicaData replica : replicas) {
-            if (!replica.isPrimary) {
-                byte[] data = readFromDataServer(replica, offset, length);
-                if (data != null) {
-                    return data;
-                }
-            }
-        }
-        
-        log.error("所有副本读取都失败");
         return null;
     }
     
     /**
-     * 检查DataServer状态
-     * @param dsNode DataServer节点地址
+     * 从多个DataServer并发删除文件
+     * @param replicas 副本列表
+     * @return 成功删除的副本数量
+     */
+    public int deleteFromMultipleDataServers(List<ReplicaData> replicas) {
+        List<CompletableFuture<Boolean>> futures = replicas.stream()
+            .map(replica -> CompletableFuture.supplyAsync(() -> 
+                deleteFileFromDataServer(replica), executorService))
+            .toList();
+        
+        // 等待所有删除完成
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+            futures.toArray(new CompletableFuture[0])
+        );
+        
+        try {
+            allFutures.get(); // 等待完成
+            
+            // 统计成功数量
+            long successCount = futures.stream()
+                .mapToLong(future -> {
+                    try {
+                        return future.get() ? 1 : 0;
+                    } catch (Exception e) {
+                        log.error("获取删除结果异常", e);
+                        return 0;
+                    }
+                })
+                .sum();
+            
+            log.info("多副本删除完成: {}/{} 成功", successCount, replicas.size());
+            return (int) successCount;
+            
+        } catch (Exception e) {
+            log.error("等待删除完成异常", e);
+            return 0;
+        }
+    }
+    
+    /**
+     * 检查DataServer是否可用
+     * @param dsNode DataServer地址
      * @return 是否可用
      */
     public boolean isDataServerAvailable(String dsNode) {
@@ -238,26 +319,15 @@ public class DataServerClientService {
     }
     
     /**
-     * 获取DataServer状态统计
-     * @return 状态统计信息
+     * 获取DataServer状态信息
+     * @return DataServer状态
      */
     public Map<String, Object> getDataServerStatus() {
         Map<String, Object> status = new ConcurrentHashMap<>();
+        status.put("dataServerStatus", new HashMap<>(dataServerStatus));
         status.put("totalDataServers", dataServerStatus.size());
-        status.put("availableDataServers", 
-            dataServerStatus.values().stream().mapToLong(available -> available ? 1 : 0).sum());
-        status.put("unavailableDataServers", 
-            dataServerStatus.values().stream().mapToLong(available -> available ? 0 : 1).sum());
-        status.put("statusDetails", new ConcurrentHashMap<>(dataServerStatus));
+        status.put("activeDataServers", dataServerStatus.values().stream()
+            .mapToInt(available -> available ? 1 : 0).sum());
         return status;
-    }
-    
-    /**
-     * 清理资源
-     */
-    public void shutdown() {
-        if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdown();
-        }
     }
 }

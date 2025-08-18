@@ -24,6 +24,8 @@ public class MetaService {
     @Autowired
     private DataServerClientService dataServerClient;
     
+
+    
     // 内存中存储文件元数据（按文件系统名称隔离）
     private final Map<String, Map<String, StatInfo>> fileMetadataByFileSystem = new ConcurrentHashMap<>();
     
@@ -62,56 +64,7 @@ public class MetaService {
         return activeServers.get(index);
     }
     
-    /**
-     * 为文件创建三副本
-     */
-    public List<ReplicaData> createReplicas(String fileSystemName, String filePath, long fileSize) {
-        List<ReplicaData> replicas = new ArrayList<>();
-        List<Map<String, Object>> availableServers = zkDataServerService.getActiveDataServers();
-        
-        if (availableServers.size() < 3) {
-            log.error("文件系统 {} 可用数据服务器数量不足，需要至少3个，当前只有{}个", 
-                     fileSystemName, availableServers.size());
-            return replicas;
-        }
-        
-        // 选择3个不同的数据服务器，确保均匀分布
-        Set<Map<String, Object>> selectedServers = new HashSet<>();
-        
-        // 优先选择副本数量较少的服务器
-        Map<String, Integer> replicaCounts = getReplicaDistribution(fileSystemName);
-        List<Map<String, Object>> sortedServers = new ArrayList<>(availableServers);
-        sortedServers.sort((a, b) -> {
-            String idA = (String) a.get("id");
-            String idB = (String) b.get("id");
-            int countA = replicaCounts.getOrDefault(idA, 0);
-            int countB = replicaCounts.getOrDefault(idB, 0);
-            return Integer.compare(countA, countB);
-        });
-        
-        // 选择前3个副本数量最少的服务器
-        for (int i = 0; i < Math.min(3, sortedServers.size()); i++) {
-            selectedServers.add(sortedServers.get(i));
-        }
-        
-        // 创建3个副本
-        int replicaIndex = 0;
-        for (Map<String, Object> server : selectedServers) {
-            ReplicaData replica = new ReplicaData();
-            replica.id = UUID.randomUUID().toString();
-            replica.dsNode = (String) server.get("address");
-            // 在副本路径中包含文件系统名称，实现隔离
-            replica.path = "/data/" + server.get("id") + "/" + fileSystemName + "/" + filePath.replace("/", "_");
-            replica.offset = 0;
-            replica.length = fileSize;
-            replica.isPrimary = replicaIndex == 0; // 第一个副本为主副本
-            replicas.add(replica);
-            replicaIndex++;
-        }
-        
-        log.info("文件系统 {} 为文件 {} 创建了 {} 个副本", fileSystemName, filePath, replicas.size());
-        return replicas;
-    }
+
     
     /**
      * 创建文件或目录
@@ -136,109 +89,95 @@ public class MetaService {
         statInfo.setMtime(System.currentTimeMillis());
         statInfo.setType(type);
         
-        if (type == FileType.File) {
-            // 为文件创建副本
-            statInfo.setReplicaData(createReplicas(fileSystemName, path, 0));
-        }
-        
         // 保存到RocksDB和内存缓存
         metadataStorage.saveMetadata(fileSystemName, path, statInfo);
         Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
         fileMetadata.put(path, statInfo);
+        
         log.info("文件系统 {} 创建文件/目录: {}, 类型: {}", fileSystemName, path, type);
         return statInfo;
     }
     
     /**
-     * 写入文件数据到DataServer（三副本同步）
+     * 写入文件数据到DataServer并记录副本位置
      */
-    public int writeFileData(String fileSystemName, String path, byte[] data, int offset, int length) {
-        StatInfo statInfo = getFile(fileSystemName, path);
-        if (statInfo == null || statInfo.getType() != FileType.File) {
-            log.error("文件系统 {} 中文件不存在或不是文件类型: {}", fileSystemName, path);
-            return 0;
+    public StatInfo writeFile(String fileSystemName, String path, byte[] data, int offset, int length) {
+        try {
+            // 1. 检查文件是否存在，不存在则创建
+            StatInfo statInfo = getFile(fileSystemName, path);
+            if (statInfo == null) {
+                log.info("文件系统 {} 中文件不存在，先创建文件: {}", fileSystemName, path);
+                statInfo = createFile(fileSystemName, path, FileType.File);
+            }
+            
+            // 2. 选择DataServer进行写入
+            Object selectedDataServer = pickDataServer(fileSystemName);
+            if (selectedDataServer == null) {
+                throw new RuntimeException("没有可用的DataServer");
+            }
+            
+            // 3. 调用DataServer的write接口
+            Map<String, Object> writeResult = dataServerClient.writeToDataServer(
+                selectedDataServer, fileSystemName, path, offset, length, data);
+            
+            if (!(Boolean) writeResult.get("success")) {
+                throw new RuntimeException("DataServer写入失败: " + writeResult.get("message"));
+            }
+            
+            // 4. 获取并记录副本位置信息
+            @SuppressWarnings("unchecked")
+            List<String> replicaLocations = (List<String>) writeResult.get("replicaLocations");
+            if (replicaLocations != null && !replicaLocations.isEmpty()) {
+                // 将副本位置转换为ReplicaData格式
+                List<ReplicaData> replicaDataList = convertToReplicaData(path, replicaLocations, offset, length);
+                statInfo.setReplicaData(replicaDataList);
+                
+                // 更新文件大小
+                statInfo.setSize(offset + length);
+                statInfo.setMtime(System.currentTimeMillis());
+                
+                // 保存更新后的元数据
+                metadataStorage.saveMetadata(fileSystemName, path, statInfo);
+                Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
+                fileMetadata.put(path, statInfo);
+                
+                log.info("文件系统 {} 写入文件成功: {}, 大小: {}, 副本位置: {}", 
+                        fileSystemName, path, statInfo.getSize(), replicaLocations);
+            }
+            
+            return statInfo;
+            
+        } catch (Exception e) {
+            log.error("文件系统 {} 写入文件失败: {}", fileSystemName, path, e);
+            throw new RuntimeException("写入文件失败: " + e.getMessage(), e);
         }
-        
-        List<ReplicaData> replicas = statInfo.getReplicaData();
-        if (replicas == null || replicas.isEmpty()) {
-            log.error("文件系统 {} 中文件没有副本信息: {}", fileSystemName, path);
-            return 0;
-        }
-        
-        // 调用DataServerClientService写入三副本
-        int successCount = dataServerClient.writeToMultipleDataServers(replicas, data, offset, length);
-        
-        if (successCount >= 2) { // 至少2个副本成功才认为写入成功
-            // 更新文件大小
-            updateFileSize(fileSystemName, path, offset + length);
-            log.info("文件系统 {} 中文件写入成功: {}, 副本数: {}/{}", 
-                    fileSystemName, path, successCount, replicas.size());
-        } else {
-            log.error("文件系统 {} 中文件写入失败: {}, 成功副本数: {}/{}", 
-                    fileSystemName, path, successCount, replicas.size());
-        }
-        
-        return successCount;
     }
     
     /**
-     * 从DataServer读取文件数据
+     * 将副本位置列表转换为ReplicaData格式
      */
-    public byte[] readFileData(String fileSystemName, String path, int offset, int length) {
-        StatInfo statInfo = getFile(fileSystemName, path);
-        if (statInfo == null || statInfo.getType() != FileType.File) {
-            log.error("文件系统 {} 中文件不存在或不是文件类型: {}", fileSystemName, path);
-            return null;
+    private List<ReplicaData> convertToReplicaData(String filePath, List<String> replicaLocations, int offset, int length) {
+        List<ReplicaData> replicaDataList = new ArrayList<>();
+        
+        for (int i = 0; i < replicaLocations.size(); i++) {
+            String location = replicaLocations.get(i);
+            String[] parts = location.split(":");
+            if (parts.length == 2) {
+                ReplicaData replica = new ReplicaData();
+                replica.id = UUID.randomUUID().toString();
+                replica.dsNode = location; // 格式：ip:port
+                replica.path = filePath;
+                replica.offset = offset;
+                replica.length = length;
+                replica.isPrimary = i == 0; // 第一个副本为主副本
+                replicaDataList.add(replica);
+            }
         }
         
-        List<ReplicaData> replicas = statInfo.getReplicaData();
-        if (replicas == null || replicas.isEmpty()) {
-            log.error("文件系统 {} 中文件没有副本信息: {}", fileSystemName, path);
-            return null;
-        }
-        
-        // 调用DataServerClientService读取数据（支持故障转移）
-        return dataServerClient.readFromMultipleDataServers(replicas, offset, length);
+        return replicaDataList;
     }
     
-    /**
-     * 删除文件数据（从所有DataServer删除）
-     */
-    public int deleteFileData(String fileSystemName, String path) {
-        StatInfo statInfo = getFile(fileSystemName, path);
-        if (statInfo == null) {
-            log.warn("文件系统 {} 中文件不存在: {}", fileSystemName, path);
-            return 0;
-        }
-        
-        if (statInfo.getType() == FileType.Directory) {
-            // 目录删除，递归删除子文件
-            List<StatInfo> children = listFiles(fileSystemName, path);
-            int totalDeleted = 0;
-            for (StatInfo child : children) {
-                totalDeleted += deleteFileData(fileSystemName, child.getPath());
-            }
-            return totalDeleted;
-        }
-        
-        // 文件删除，从所有DataServer删除副本
-        List<ReplicaData> replicas = statInfo.getReplicaData();
-        if (replicas == null || replicas.isEmpty()) {
-            log.warn("文件系统 {} 中文件没有副本信息: {}", fileSystemName, path);
-            return 0;
-        }
-        
-        int successCount = 0;
-        for (ReplicaData replica : replicas) {
-            if (dataServerClient.deleteFromDataServer(replica)) {
-                successCount++;
-            }
-        }
-        
-        log.info("文件系统 {} 中文件删除完成: {}, 成功删除副本数: {}/{}", 
-                fileSystemName, path, successCount, replicas.size());
-        return successCount;
-    }
+
     
     /**
      * 获取文件信息
@@ -298,12 +237,8 @@ public class MetaService {
                     return false;
                 }
             } else {
-                // 文件删除，从所有DataServer删除副本
-                int deletedCount = deleteFileData(fileSystemName, path);
-                if (deletedCount == 0) {
-                    log.error("文件系统 {} 文件删除失败: {}", fileSystemName, path);
-                    return false;
-                }
+                // 文件删除：DataServer会自动管理副本删除，这里只删除元数据
+                log.info("文件系统 {} 删除文件: {}, 元数据删除", fileSystemName, path);
             }
             
             // 删除成功后，从RocksDB和内存缓存中删除元数据
@@ -343,11 +278,12 @@ public class MetaService {
                         return false;
                     }
                 } else {
-                    // 删除子文件
-                    int deletedCount = deleteFileData(fileSystemName, childPath);
-                    if (deletedCount == 0) {
-                        log.error("文件系统 {} 删除子文件失败: {}", fileSystemName, childPath);
-                        return false;
+                    // 删除子文件，先调用DataServer删除实际数据
+                    List<ReplicaData> replicas = child.getReplicaData();
+                    if (replicas != null && !replicas.isEmpty()) {
+                        int deletedCount = dataServerClient.deleteFromMultipleDataServers(replicas);
+                        log.info("文件系统 {} 删除子文件: {}, 在DataServer上成功删除: {}/{}", 
+                                fileSystemName, childPath, deletedCount, replicas.size());
                     }
                 }
                 
@@ -366,21 +302,7 @@ public class MetaService {
         }
     }
     
-    /**
-     * 更新文件大小
-     */
-    public void updateFileSize(String fileSystemName, String path, long size) {
-        StatInfo statInfo = getFile(fileSystemName, path);
-        if (statInfo != null) {
-            statInfo.setSize(size);
-            statInfo.setMtime(System.currentTimeMillis());
-            // 更新到RocksDB和内存缓存
-            metadataStorage.saveMetadata(fileSystemName, path, statInfo);
-            Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-            fileMetadata.put(path, statInfo);
-            log.info("文件系统 {} 更新文件大小: {}, 新大小: {}", fileSystemName, path, size);
-        }
-    }
+
     
     /**
      * 获取所有数据服务器
@@ -389,43 +311,7 @@ public class MetaService {
         return new ArrayList<>(zkDataServerService.getAllDataServers().values());
     }
     
-    /**
-     * 获取副本分布情况
-     */
-    public Map<String, Integer> getReplicaDistribution(String fileSystemName) {
-        Map<String, Integer> distribution = new HashMap<>();
-        Map<String, Map<String, Object>> allServers = zkDataServerService.getAllDataServers();
-        
-        // 初始化所有数据服务器的副本计数
-        for (String serverId : allServers.keySet()) {
-            distribution.put(serverId, 0);
-        }
-        
-        // 统计每个数据服务器上的副本数量
-        Map<String, StatInfo> fileMetadata = getFileMetadata(fileSystemName);
-        for (StatInfo statInfo : fileMetadata.values()) {
-            if (statInfo.getReplicaData() != null) {
-                for (ReplicaData replica : statInfo.getReplicaData()) {
-                    String serverId = extractServerId(replica.dsNode);
-                    distribution.put(serverId, distribution.getOrDefault(serverId, 0) + 1);
-                }
-            }
-        }
-        
-        return distribution;
-    }
-    
-    /**
-     * 从数据服务器地址提取服务器ID
-     */
-    private String extractServerId(String dsNode) {
-        // 从 "localhost:9001" 提取 "ds1"
-        if (dsNode.contains(":9001")) return "ds1";
-        if (dsNode.contains(":9002")) return "ds2";
-        if (dsNode.contains(":9003")) return "ds3";
-        if (dsNode.contains(":9004")) return "ds4";
-        return "unknown";
-    }
+
     
     /**
      * 获取所有文件元数据

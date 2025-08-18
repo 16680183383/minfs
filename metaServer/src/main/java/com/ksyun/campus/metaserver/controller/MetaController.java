@@ -5,12 +5,14 @@ import com.ksyun.campus.metaserver.domain.FileType;
 import com.ksyun.campus.metaserver.services.MetaService;
 import com.ksyun.campus.metaserver.services.FsckServices;
 import com.ksyun.campus.metaserver.services.MetadataStorageService;
+import com.ksyun.campus.metaserver.services.ZkMetaServerService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,9 @@ public class MetaController {
     
     @Autowired
     private MetadataStorageService metadataStorage;
+    
+    @Autowired
+    private ZkMetaServerService zkMetaServerService;
     
     /**
      * 获取文件状态信息
@@ -64,6 +69,34 @@ public class MetaController {
     }
     
     /**
+     * 写入文件数据
+     */
+    @RequestMapping(value = "write", method = RequestMethod.POST)
+    public ResponseEntity<StatInfo> writeFile(
+            @RequestHeader String fileSystemName,
+            @RequestParam String path,
+            @RequestParam int offset,
+            @RequestParam int length,
+            HttpServletRequest request) {
+        try {
+            log.info("写入文件: fileSystemName={}, path={}, offset={}, length={}", 
+                    fileSystemName, path, offset, length);
+            
+            // 读取请求体中的二进制数据
+            byte[] data = request.getInputStream().readAllBytes();
+            
+            // 调用MetaService写入文件
+            StatInfo statInfo = metaService.writeFile(fileSystemName, path, data, offset, length);
+            
+            return ResponseEntity.ok(statInfo);
+            
+        } catch (Exception e) {
+            log.error("写入文件失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+    
+    /**
      * 列出目录内容
      */
     @RequestMapping("listStatus")
@@ -95,80 +128,8 @@ public class MetaController {
         }
     }
 
-    /**
-     * 保存文件写入成功后的元数据信息，包括文件path、size、三副本信息等
-     */
-    @RequestMapping("write")
-    public ResponseEntity<String> commitWrite(@RequestHeader String fileSystemName, 
-                                           @RequestParam String path, 
-                                           @RequestParam int offset, 
-                                           @RequestParam int length) {
-        log.info("提交写入: fileSystemName={}, path={}, offset={}, length={}", fileSystemName, path, offset, length);
-        metaService.updateFileSize(fileSystemName, path, offset + length);
-        return ResponseEntity.ok("写入成功");
-    }
-    
-    /**
-     * 直接写入文件数据到DataServer（三副本同步）
-     */
-    @RequestMapping("writeData")
-    public ResponseEntity<Map<String, Object>> writeFileData(@RequestHeader String fileSystemName,
-                                                           @RequestParam String path,
-                                                           @RequestParam int offset,
-                                                           @RequestParam int length,
-                                                           @RequestBody byte[] data) {
-        log.info("直接写入文件数据: fileSystemName={}, path={}, offset={}, length={}, dataSize={}", 
-                fileSystemName, path, offset, length, data.length);
-        
-        int successCount = metaService.writeFileData(fileSystemName, path, data, offset, length);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", successCount >= 2);
-        result.put("fileSystemName", fileSystemName);
-        result.put("successReplicas", successCount);
-        result.put("totalReplicas", 3);
-        result.put("message", successCount >= 2 ? "写入成功" : "写入失败");
-        
-        return ResponseEntity.ok(result);
-    }
-    
-    /**
-     * 从DataServer读取文件数据
-     */
-    @RequestMapping("readData")
-    public ResponseEntity<byte[]> readFileData(@RequestHeader String fileSystemName,
-                                             @RequestParam String path,
-                                             @RequestParam int offset,
-                                             @RequestParam int length) {
-        log.info("读取文件数据: fileSystemName={}, path={}, offset={}, length={}", fileSystemName, path, offset, length);
-        
-        byte[] data = metaService.readFileData(fileSystemName, path, offset, length);
-        if (data != null) {
-            return ResponseEntity.ok(data);
-        } else {
-            return ResponseEntity.notFound().build();
-        }
-    }
-    
-    /**
-     * 删除文件数据（从所有DataServer删除）
-     */
-    @RequestMapping("deleteData")
-    public ResponseEntity<Map<String, Object>> deleteFileData(@RequestHeader String fileSystemName,
-                                                            @RequestParam String path) {
-        log.info("删除文件数据: fileSystemName={}, path={}", fileSystemName, path);
-        
-        int deletedCount = metaService.deleteFileData(fileSystemName, path);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", deletedCount > 0);
-        result.put("fileSystemName", fileSystemName);
-        result.put("deletedReplicas", deletedCount);
-        result.put("message", "成功删除 " + deletedCount + " 个副本");
-        
-        return ResponseEntity.ok(result);
-    }
 
+    
     /**
      * 根据文件path查询三副本的位置，返回客户端具体ds、文件分块信息
      */
@@ -216,15 +177,7 @@ public class MetaController {
         return ResponseEntity.ok(clusterInfo);
     }
     
-    /**
-     * 获取副本分布信息
-     */
-    @RequestMapping("cluster/replica-distribution")
-    public ResponseEntity<Map<String, Integer>> getReplicaDistribution(@RequestHeader String fileSystemName) {
-        log.info("获取副本分布信息: fileSystemName={}", fileSystemName);
-        Map<String, Integer> distribution = metaService.getReplicaDistribution(fileSystemName);
-        return ResponseEntity.ok(distribution);
-    }
+
     
     /**
      * 手动触发FSCK检查
@@ -371,5 +324,81 @@ public class MetaController {
         health.put("dataServerStatus", dataServerStatus);
         
         return ResponseEntity.ok(health);
+    }
+    
+    /**
+     * 检查ZK注册状态
+     */
+    @RequestMapping("zk/check")
+    public ResponseEntity<Map<String, Object>> checkZkRegistration() {
+        log.info("检查ZK注册状态");
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // 检查当前MetaServer信息
+            Map<String, Object> currentInfo = zkMetaServerService.getCurrentMetaServerInfo();
+            result.put("currentMetaServer", currentInfo);
+            
+            // 检查是否为Leader
+            boolean isLeader = zkMetaServerService.isLeader();
+            result.put("isLeader", isLeader);
+            
+            // 检查ZK连接状态
+            boolean zkConnected = zkMetaServerService.isZkConnected();
+            result.put("zkConnected", zkConnected);
+            
+            // 获取所有MetaServer节点
+            List<Map<String, Object>> allMetaServers = zkMetaServerService.getAllMetaServers();
+            result.put("allMetaServers", allMetaServers);
+            result.put("totalMetaServers", allMetaServers.size());
+            
+            result.put("status", "success");
+            result.put("timestamp", System.currentTimeMillis());
+            
+        } catch (Exception e) {
+            log.error("检查ZK注册状态失败", e);
+            result.put("status", "error");
+            result.put("error", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(result);
+    }
+    
+    /**
+     * 获取ZK集群状态
+     */
+    @RequestMapping("zk/cluster")
+    public ResponseEntity<Map<String, Object>> getZkClusterStatus() {
+        log.info("获取ZK集群状态");
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // 获取所有MetaServer节点
+            List<Map<String, Object>> allMetaServers = zkMetaServerService.getAllMetaServers();
+            
+            // 统计集群状态
+            long activeCount = allMetaServers.stream()
+                .filter(server -> "active".equals(server.get("status")))
+                .count();
+            
+            result.put("totalMetaServers", allMetaServers.size());
+            result.put("activeMetaServers", activeCount);
+            result.put("inactiveMetaServers", allMetaServers.size() - activeCount);
+            result.put("metaServers", allMetaServers);
+            
+            // 检查当前节点状态
+            Map<String, Object> currentInfo = zkMetaServerService.getCurrentMetaServerInfo();
+            result.put("currentNode", currentInfo);
+            
+            result.put("status", "success");
+            result.put("timestamp", System.currentTimeMillis());
+            
+        } catch (Exception e) {
+            log.error("获取ZK集群状态失败", e);
+            result.put("status", "error");
+            result.put("error", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(result);
     }
 }

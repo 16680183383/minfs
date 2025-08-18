@@ -4,6 +4,7 @@ import com.ksyun.campus.metaserver.domain.StatInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -19,7 +20,10 @@ public class MetadataStorageService {
     
     private RocksDB rocksDB;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final String dbPath = "./rocksdb_metadata";
+    
+    // 从配置文件读取RocksDB路径
+    @Value("${metadata.storage.path:./rocksdb_metadata}")
+    private String dbPath;
     
     // 缓存文件系统信息
     private final Map<String, Set<String>> fileSystemPaths = new ConcurrentHashMap<>();
@@ -27,9 +31,12 @@ public class MetadataStorageService {
     @PostConstruct
     public void init() {
         try {
+            log.info("初始化RocksDB，路径: {}", dbPath);
+            
             File dbDir = new File(dbPath);
             if (!dbDir.exists()) {
                 dbDir.mkdirs();
+                log.info("创建RocksDB目录: {}", dbPath);
             }
             
             Options options = new Options();
@@ -39,8 +46,6 @@ public class MetadataStorageService {
             options.setWriteBufferSize(64 * 1024 * 1024); // 64MB
             options.setLevel0SlowdownWritesTrigger(8);
             options.setLevel0StopWritesTrigger(12);
-            options.setMaxWriteBufferNumber(4);
-            options.setWriteBufferSize(64 * 1024 * 1024); // 64MB
             
             rocksDB = RocksDB.open(options, dbPath);
             log.info("RocksDB初始化成功，路径: {}", dbPath);
@@ -49,7 +54,10 @@ public class MetadataStorageService {
             rebuildFileSystemCache();
             
         } catch (RocksDBException e) {
-            log.error("RocksDB初始化失败", e);
+            log.error("RocksDB初始化失败，路径: {}", dbPath, e);
+            throw new RuntimeException("RocksDB初始化失败: " + dbPath, e);
+        } catch (Exception e) {
+            log.error("RocksDB初始化过程中发生未知错误", e);
             throw new RuntimeException("RocksDB初始化失败", e);
         }
     }

@@ -3,10 +3,13 @@ package com.ksyun.campus.metaserver.services;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.zookeeper.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Service
-public class ZkMetaServerService {
+public class ZkMetaServerService implements ApplicationRunner {
     
     @Value("${metaserver.zk.connect.string:localhost:2181}")
     private String zkConnectString;
@@ -26,6 +29,9 @@ public class ZkMetaServerService {
     
     @Value("${server.port:8000}")
     private int serverPort;
+    
+    @Value("${metaserver.host:localhost}")
+    private String serverHost;
     
     private ZooKeeper zooKeeper;
     private final AtomicBoolean isLeader = new AtomicBoolean(false);
@@ -39,6 +45,7 @@ public class ZkMetaServerService {
             connectToZookeeper();
             createMetaServerNode();
             startLeaderElection();
+            log.info("ZkMetaServerService初始化完成");
         } catch (Exception e) {
             log.error("初始化ZK元数据服务失败", e);
         }
@@ -52,12 +59,32 @@ public class ZkMetaServerService {
             public void process(WatchedEvent event) {
                 if (event.getState() == Event.KeeperState.SyncConnected) {
                     connectedSignal.countDown();
+                } else if (event.getState() == Event.KeeperState.Disconnected) {
+                    log.warn("ZK连接断开");
+                } else if (event.getState() == Event.KeeperState.Expired) {
+                    log.error("ZK会话过期");
+                    reconnectToZookeeper();
                 }
             }
         });
         
         connectedSignal.await();
-        log.info("ZK元数据服务成功连接到Zookeeper: {}", zkConnectString);
+        log.info("成功连接到Zookeeper: {}", zkConnectString);
+    }
+    
+    private void reconnectToZookeeper() {
+        log.info("尝试重新连接Zookeeper...");
+        try {
+            if (zooKeeper != null) {
+                zooKeeper.close();
+            }
+            connectToZookeeper();
+            createMetaServerNode();
+            startLeaderElection();
+            log.info("重新连接Zookeeper成功");
+        } catch (Exception e) {
+            log.error("重新连接Zookeeper失败", e);
+        }
     }
     
     private void createMetaServerNode() {
@@ -75,7 +102,7 @@ public class ZkMetaServerService {
             }
             
             // 创建当前MetaServer节点
-            String serverInfo = "localhost:" + serverPort + ":active";
+            String serverInfo = serverHost + ":" + serverPort + ":active:" + System.currentTimeMillis();
             zooKeeper.create(metaServerPath, serverInfo.getBytes(), 
                 ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
             log.info("创建MetaServer节点: {} -> {}", metaServerPath, serverInfo);
@@ -108,15 +135,16 @@ public class ZkMetaServerService {
     
     private void tryBecomeLeader() {
         try {
-            String leaderNodePath = leaderPath + "/meta" + serverPort;
-            String leaderData = "localhost:" + serverPort + ":" + System.currentTimeMillis();
+            // 修复: 使用固定的leader节点名称，而不是每个MetaServer都有自己的leader节点
+            String leaderNodePath = leaderPath + "/leader";
+            String leaderData = serverHost + ":" + serverPort + ":" + System.currentTimeMillis();
             
             zooKeeper.create(leaderNodePath, leaderData.getBytes(), 
                 ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
             
             // 成功创建leader节点，成为leader
             isLeader.set(true);
-            log.info("成功成为leader: {}", leaderNodePath);
+            log.info("成功成为leader: {} -> {}", leaderNodePath, leaderData);
             
             // 设置leader节点删除监听
             watchLeaderNode(leaderNodePath);
@@ -162,84 +190,108 @@ public class ZkMetaServerService {
                 }
             });
         } catch (Exception e) {
-            log.error("设置当前leader节点监听失败", e);
+            log.error("设置leader节点监听失败", e);
         }
     }
     
     /**
-     * 检查当前节点是否是leader
+     * 获取所有MetaServer节点信息
+     */
+    public List<Map<String, Object>> getAllMetaServers() {
+        List<Map<String, Object>> metaServers = new ArrayList<>();
+        try {
+            String metaServerPath = zkRootPath + "/metaservers";
+            List<String> children = zooKeeper.getChildren(metaServerPath, false);
+            
+            for (String child : children) {
+                try {
+                    String fullPath = metaServerPath + "/" + child;
+                    byte[] data = zooKeeper.getData(fullPath, false, null);
+                    String serverInfo = new String(data);
+                    
+                    Map<String, Object> server = new HashMap<>();
+                    server.put("id", child);
+                    server.put("path", fullPath);
+                    server.put("info", serverInfo);
+                    
+                    // 解析服务器信息
+                    String[] parts = serverInfo.split(":");
+                    if (parts.length >= 3) {
+                        server.put("host", parts[0]);
+                        server.put("port", Integer.parseInt(parts[1]));
+                        server.put("status", parts[2]);
+                        if (parts.length >= 4) {
+                            server.put("registerTime", Long.parseLong(parts[3]));
+                        }
+                    }
+                    
+                    metaServers.add(server);
+                } catch (Exception e) {
+                    log.warn("获取MetaServer节点信息失败: {}", child, e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取所有MetaServer节点失败", e);
+        }
+        return metaServers;
+    }
+    
+    /**
+     * 获取当前MetaServer信息
+     */
+    public Map<String, Object> getCurrentMetaServerInfo() {
+        Map<String, Object> info = new HashMap<>();
+        info.put("host", serverHost);
+        info.put("port", serverPort);
+        info.put("path", metaServerPath);
+        info.put("isLeader", isLeader.get());
+        info.put("zkConnected", zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED);
+        return info;
+    }
+    
+    /**
+     * 检查是否为Leader
      */
     public boolean isLeader() {
         return isLeader.get();
     }
     
     /**
-     * 获取当前leader信息
+     * 获取ZK连接状态
      */
-    public String getCurrentLeader() {
-        try {
-            List<String> children = zooKeeper.getChildren(leaderPath, false);
-            if (!children.isEmpty()) {
-                // 返回第一个leader节点
-                String leaderId = children.get(0);
-                byte[] data = zooKeeper.getData(leaderPath + "/" + leaderId, false, null);
-                return new String(data);
-            }
-        } catch (Exception e) {
-            log.error("获取当前leader信息失败", e);
-        }
-        return null;
+    public boolean isZkConnected() {
+        return zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED;
     }
     
     /**
-     * 获取所有MetaServer节点
+     * 获取ZK实例
      */
-    public List<String> getAllMetaServers() {
-        try {
-            return zooKeeper.getChildren(zkRootPath + "/metaservers", false);
-        } catch (Exception e) {
-            log.error("获取所有MetaServer节点失败", e);
-            return new ArrayList<>();
-        }
+    public ZooKeeper getZooKeeper() {
+        return zooKeeper;
     }
     
     /**
-     * 更新MetaServer状态
+     * 获取当前节点路径
      */
-    public void updateMetaServerStatus(String status) {
-        try {
-            String serverInfo = "localhost:" + serverPort + ":" + status;
-            zooKeeper.setData(metaServerPath, serverInfo.getBytes(), -1);
-            log.debug("更新MetaServer状态: {}", status);
-        } catch (Exception e) {
-            log.error("更新MetaServer状态失败", e);
-        }
-    }
-    
-    /**
-     * 获取集群状态
-     */
-    public Map<String, Object> getClusterStatus() {
-        Map<String, Object> status = new HashMap<>();
-        status.put("isLeader", isLeader.get());
-        status.put("serverPort", serverPort);
-        status.put("currentLeader", getCurrentLeader());
-        status.put("allMetaServers", getAllMetaServers());
-        status.put("zkConnected", zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED);
-        return status;
+    public String getMetaServerPath() {
+        return metaServerPath;
     }
     
     @PreDestroy
-    public void close() {
+    public void destroy() {
         isRunning.set(false);
-        if (zooKeeper != null) {
-            try {
+        try {
+            if (zooKeeper != null) {
                 zooKeeper.close();
-                log.info("ZK元数据服务已关闭");
-            } catch (InterruptedException e) {
-                log.error("关闭ZK连接失败", e);
-                Thread.currentThread().interrupt();
+                log.info("ZkMetaServerService销毁完成");
             }
+        } catch (Exception e) {
+            log.error("销毁ZkMetaServerService失败", e);
         }
+    }
+    
+    @Override
+    public void run(ApplicationArguments args) throws Exception {
+        log.info("ZkMetaServerService启动完成，当前节点: {}", metaServerPath);
     }
 }
