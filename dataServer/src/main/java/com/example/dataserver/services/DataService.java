@@ -10,14 +10,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.RandomAccessFile;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,6 +40,9 @@ public class DataService {
     private static final int BLOCK_SIZE = 64 * 1024 * 1024; // 64MB
     // 新增轮询计数器（记录上次选择的索引，简化实现）
     private static int roundRobinIndex = 0;
+
+    // 缓存：文件路径 -> 副本位置列表（仅适合小型系统，重启后失效）
+    private final Map<String, List<String>> fileReplicaCache = new ConcurrentHashMap<>();
 
     /**
      * 计算节点的剩余容量（总容量-已用容量）
@@ -364,11 +365,22 @@ public class DataService {
                 writeToLocal(getLocalFilePath(chunkPath), chunk, 0);
             }
 
+            // 2. 生成MD5清单文件（与分块文件同目录，不依赖metaServer）
+            String md5ListPath = path + "/md5_list.txt";
+            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            // 新增：将List<String>格式化为字符串，再转为byte[]（适配方法参数）
+            StringBuilder md5Content = new StringBuilder();
+            for (int i = 0; i < chunkMd5List.size(); i++) {
+                // 格式：块索引,MD5（每行一条，便于后续读取解析）
+                md5Content.append(i).append(",").append(chunkMd5List.get(i)).append(System.lineSeparator());
+            }
+            byte[] md5ListBytes = md5Content.toString().getBytes(StandardCharsets.UTF_8); // 转为byte[]
+            writeMd5ListToLocal(localMd5ListPath, md5ListBytes);
+            System.out.println("[INFO] MD5清单文件已生成：" + localMd5ListPath);
+
             // 核心修改：仅原始请求（非副本同步）需要同步至其他节点
             if (!isReplicaSync) {
-                // 1. 记录块MD5列表到元数据（符合文档"元数据管理"要求，实际需调用metaServer接口）
-                saveChunkMd5ToMeta(path, chunkMd5List);
-                System.out.println("[INFO] 块MD5列表已记录到元数据：" + chunkMd5List);
+
                 // 选择2个副本节点（满足三副本要求）
                 List<Map<String, Object>> candidateDs = selectReplicaNodes(path);
                 System.out.println("[INFO] 选中副本节点：" + candidateDs.stream()
@@ -394,6 +406,9 @@ public class DataService {
                     }
                 }
 
+                // 同步MD5清单文件（新增）
+                syncMd5ListToReplica(candidateDs, path, localMd5ListPath);
+
                 // 添加副本节点至结果列表（最终共3个副本）
                 for (Map<String, Object> ds : candidateDs) {
                     replicaLocations.add(ds.get("ip") + ":" + ds.get("port"));
@@ -403,6 +418,14 @@ public class DataService {
             }
 
             System.out.println("[INFO] 分块写入完成，三副本位置：" + replicaLocations);
+
+            // 仅原始请求需要缓存副本位置
+            if (!isReplicaSync) {
+                // 缓存副本位置（key:文件路径，value:三副本位置）
+                fileReplicaCache.put(path, replicaLocations);
+                System.out.println("[INFO] 缓存文件副本位置：" + path + " -> " + replicaLocations);
+            }
+
             return replicaLocations;
         } catch (Exception e) {
             System.err.println("[ERROR] 分块写入失败：" + e.getMessage());
@@ -416,80 +439,21 @@ public class DataService {
      * @param path 文件路径（如/test/large_file.bin）
      * @return 包含三副本位置和块MD5的结果
      */
-//    public Map<String, Object> writeWithChunk(byte[] data, String path) {
-//        try {
-//            // 初始化副本位置列表（本节点作为主副本）
-//            List<String> replicaLocations = new ArrayList<>();
-//            replicaLocations.add(selfIp + ":" + selfPort);
-//            System.out.println("[INFO] 分块写入开始，目标文件路径：" + path + "，总大小：" + data.length + "字节，本节点：" + selfIp + ":" + selfPort);
-//
-//            // 1. 选择副本节点（按文档要求跨AZ分布）
-//            List<Map<String, Object>> candidateDs = selectReplicaNodes(path);
-//            System.out.println("[INFO] 选中的副本节点数量：" + candidateDs.size() + "，节点信息：" + candidateDs.stream()
-//                    .map(ds -> ds.get("ip") + ":" + ds.get("port") + "(AZ:" + ds.get("zone") + ")")
-//                    .collect(Collectors.joining(",")));
-//            for (Map<String, Object> ds : candidateDs) {
-//                replicaLocations.add(ds.get("ip") + ":" + ds.get("port"));
-//            }
-//
-//            // 2. 分块处理（按BLOCK_SIZE拆分，默认64MB）
-//            List<String> chunkMd5List = new ArrayList<>();
-//            int totalChunks = (int) Math.ceil((double) data.length / BLOCK_SIZE);
-//            System.out.println("[INFO] 数据分块完成，总块数：" + totalChunks + "，块大小：" + BLOCK_SIZE + "字节");
-//
-//            for (int i = 0; i < totalChunks; i++) {
-//                int offset = i * BLOCK_SIZE;
-//                int length = Math.min(BLOCK_SIZE, data.length - offset);
-//                byte[] chunk = new byte[length];
-//                System.arraycopy(data, offset, chunk, 0, length);
-//                System.out.println("[INFO] 处理块 " + i + "，偏移量：" + offset + "，大小：" + length + "字节");
-//
-//                // 2.1 写入本地块
-//                String chunkPath = path + "/chunk_" + i; // 块路径格式：文件路径/块索引
-//                String localChunkPath = getLocalFilePath(chunkPath);
-//                System.out.println("[INFO] 块 " + i + " 开始写入本地，路径：" + localChunkPath);
-//                writeToLocal(localChunkPath, chunk, 0); // 调用现有本地写入方法（已带日志）
-//
-//                // 2.2 同步至所有副本节点
-//                for (Map<String, Object> ds : candidateDs) {
-//                    String dsIp = (String) ds.get("ip");
-//                    int dsPort = (int) ds.get("port");
-//                    String dsAz = (String) ds.get("zone");
-//                    System.out.println("[INFO] 块 " + i + " 开始同步至副本节点：" + dsIp + ":" + dsPort + "(AZ:" + dsAz + ")");
-//
-//                    boolean success = syncToReplica(dsIp, dsPort, chunk, chunkPath);
-//                    if (success) {
-//                        System.out.println("[INFO] 块 " + i + " 同步至 " + dsIp + ":" + dsPort + " 成功");
-//                    } else {
-//                        System.err.println("[ERROR] 块 " + i + " 同步至 " + dsIp + ":" + dsPort + " 失败，重试后仍未成功");
-//                        throw new RuntimeException("Chunk " + i + " sync failed to " + dsIp + ":" + dsPort);
-//                    }
-//                }
-//
-//                // 2.3 计算块MD5并记录（用于读取时校验）
-//                String chunkMd5 = DigestUtils.md5Hex(chunk);
-//                chunkMd5List.add(chunkMd5);
-//                System.out.println("[INFO] 块 " + i + " MD5计算完成：" + chunkMd5);
-//            }
-//
-//            // 3. 组装返回结果（符合文档"三副本位置记录"和"MD5校验"要求）
-//            Map<String, Object> result = new HashMap<>();
-//            result.put("replicaLocations", replicaLocations);
-//            result.put("chunkMd5List", chunkMd5List);
-//            System.out.println("[INFO] 分块写入全部完成，三副本位置：" + replicaLocations + "，总块数：" + totalChunks);
-//            return result;
-//        } catch (Exception e) {
-//            System.err.println("[ERROR] 分块写入整体失败：" + e.getMessage() + "，异常位置：" + e.getStackTrace()[0]);
-//            throw new RuntimeException("Write with chunk failed: " + e.getMessage(), e);
-//        }
-//    }
 
     /**
      * 分块读取文件并校验MD5
      */
-    public byte[] readWithChunk(String path, List<String> expectedChunkMd5) {
+    public byte[] readWithChunk(String path) {
         try {
-            // 1. 获取所有块（假设元数据记录了总块数，此处简化为遍历目录）
+            // 1. 读取本地MD5清单文件（替代从metaServer获取）
+            String md5ListPath = path + "/md5_list.txt";
+            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            List<String> expectedChunkMd5 = readMd5ListFromLocal(localMd5ListPath);
+            if (expectedChunkMd5.isEmpty()) {
+                throw new RuntimeException("MD5清单文件为空：" + localMd5ListPath);
+            }
+
+            // 2. 获取块文件并校验（原有逻辑不变）
             File chunkDir = new File(getLocalFilePath(path));
             if (!chunkDir.exists()) {
                 throw new RuntimeException("File not found: " + path);
@@ -498,8 +462,12 @@ public class DataService {
             if (chunkFiles == null || chunkFiles.length == 0) {
                 throw new RuntimeException("No chunks found for: " + path);
             }
+            // 校验块数量与MD5清单数量一致
+            if (chunkFiles.length != expectedChunkMd5.size()) {
+                throw new RuntimeException("块数量与MD5清单不匹配：块数" + chunkFiles.length + "，MD5数" + expectedChunkMd5.size());
+            }
 
-            // 2. 按块号排序并读取
+            // 3. 按块号排序并校验MD5
             List<File> sortedChunks = Arrays.stream(chunkFiles)
                     .sorted((f1, f2) -> {
                         int num1 = Integer.parseInt(f1.getName().split("_")[1]);
@@ -508,32 +476,114 @@ public class DataService {
                     })
                     .collect(Collectors.toList());
 
-            // 3. 拼接数据并校验块MD5
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             for (int i = 0; i < sortedChunks.size(); i++) {
                 File chunkFile = sortedChunks.get(i);
                 byte[] chunkData = Files.readAllBytes(chunkFile.toPath());
-                // 校验当前块MD5
+
+                // 校验MD5（与清单中的预期值对比）
                 String actualMd5 = DigestUtils.md5Hex(chunkData);
-                if (!actualMd5.equals(expectedChunkMd5.get(i))) {
-                    throw new RuntimeException("Chunk " + i + " MD5 mismatch");
+                String expectedMd5 = expectedChunkMd5.get(i);
+                if (!actualMd5.equals(expectedMd5)) {
+                    throw new RuntimeException("块 " + i + " MD5校验失败：预期" + expectedMd5 + "，实际" + actualMd5);
                 }
+                System.out.println("[INFO] 块 " + i + " MD5校验通过：" + actualMd5);
+
                 bos.write(chunkData);
             }
 
+            System.out.println("[INFO] 文件" + path + "读取完成，MD5校验通过");
             return bos.toByteArray();
         } catch (Exception e) {
+            System.err.println("[ERROR] 分块读取失败：" + e.getMessage());
             throw new RuntimeException("Read with chunk failed", e);
         }
     }
 
-    // 新增：将块MD5列表记录到元数据（模拟实现，实际需对接metaServer）
-    // 符合文档"元数据存储方式自行实现"要求（如用sqlite/rocksdb存储）
-    private void saveChunkMd5ToMeta(String path, List<String> chunkMd5List) {
-        // 模拟逻辑：假设元数据服务提供接口存储MD5列表
-        // 实际项目中需调用metaServer接口，如：metaClient.saveChunkMd5(path, chunkMd5List);
-        System.out.println("[INFO] 元数据记录 - 路径：" + path + "，块MD5列表：" + chunkMd5List);
-        // 可在此处实现本地嵌入式数据库（如sqlite）存储，符合文档"元数据自行实现"要求
+    // 新增：从本地MD5清单文件读取预期MD5列表
+    private List<String> readMd5ListFromLocal(String localMd5ListPath) throws Exception {
+        List<String> expectedChunkMd5 = new ArrayList<>();
+        File md5File = new File(localMd5ListPath);
+        if (!md5File.exists()) {
+            throw new RuntimeException("MD5清单文件不存在：" + localMd5ListPath);
+        }
+
+        // 按行读取，解析“块索引,MD5”格式
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(md5File))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split(",");
+                if (parts.length != 2) {
+                    throw new RuntimeException("MD5清单格式错误：" + line);
+                }
+                expectedChunkMd5.add(parts[1]); // 仅保留MD5值
+            }
+        }
+        return expectedChunkMd5;
+    }
+
+    // 新增：将MD5列表写入本地清单文件
+    public void writeMd5ListToLocal(String md5ListPath, byte[] md5ListData) throws IOException {
+        // 步骤1：规范化路径，避免因路径格式错误导致父目录为null
+        // （例如处理path为"/test/7.txt/md5_list.txt"的情况，确保能解析出父目录）
+        File md5ListFile = new File(md5ListPath);
+
+        // 关键校验：若父目录为null（路径格式错误），手动构造合理路径
+        if (md5ListFile.getParentFile() == null) {
+            // 假设本地存储根目录为localStoragePath（如D:\data\apps\minfs\dataserver\9002）
+            // 拼接根目录与MD5清单路径，确保父目录存在
+            md5ListFile = new File(localStoragePath, md5ListPath);
+            System.out.println("[WARN] 路径格式异常，自动拼接根目录后路径：" + md5ListFile.getAbsolutePath());
+        }
+
+        // 步骤2：创建父目录（此时getParentFile()已非null）
+        File parentDir = md5ListFile.getParentFile();
+        if (!parentDir.exists()) {
+            boolean dirCreated = parentDir.mkdirs();
+            if (!dirCreated) {
+                throw new IOException("创建MD5清单父目录失败：" + parentDir.getAbsolutePath());
+            }
+            System.out.println("[INFO] 创建MD5清单父目录：" + parentDir.getAbsolutePath());
+        }
+
+        // 直接用byte[]写入文件（无需List转换）
+        try (FileOutputStream fos = new FileOutputStream(md5ListFile)) {
+            fos.write(md5ListData);
+        }
+        System.out.println("[INFO] MD5清单写入成功：" + md5ListPath);
+    }
+
+    // 新增：同步MD5清单文件到副本节点
+    private void syncMd5ListToReplica(List<Map<String, Object>> candidateDs, String path, String localMd5ListPath) throws Exception {
+        byte[] md5ListData = Files.readAllBytes(new File(localMd5ListPath).toPath());
+        // 步骤1：确保md5ListPath为相对路径（不含本地根目录），避免副本节点路径重复
+        // （例如path为"/test/7.txt"，则md5ListPath为"test/7.txt/md5_list.txt"，去掉开头的"/"）
+        String md5ListPath = path.startsWith("/") ? path.substring(1) : path;
+        md5ListPath += "/md5_list.txt"; // 最终为"test/7.txt/md5_list.txt"
+
+        for (Map<String, Object> ds : candidateDs) {
+            String dsIp = (String) ds.get("ip");
+            int dsPort = (int) ds.get("port");
+            // 调用副本节点的“写入MD5清单”接口（需在副本节点Controller中实现）
+            String url = "http://" + dsIp + ":" + dsPort + "/writeMd5List?path=" + URLEncoder.encode(md5ListPath, StandardCharsets.UTF_8.name());
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.set("X-Is-Replica-Sync", "true");
+            headers.set("fileSystemName", "minfs");
+            HttpEntity<byte[]> request = new HttpEntity<>(md5ListData, headers);
+
+            try {
+                ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+                if (!response.getStatusCode().is2xxSuccessful()) {
+                    throw new RuntimeException("MD5清单同步至" + dsIp + ":" + dsPort + "失败，响应码：" + response.getStatusCodeValue());
+                }
+                System.out.println("[INFO] MD5清单同步至" + dsIp + ":" + dsPort + "成功");
+            } catch (Exception e) {
+                System.err.println("[ERROR] MD5清单同步至" + dsIp + ":" + dsPort + "失败：" + e.getMessage());
+                throw e; // 传播异常，确保同步失败时整体写入操作失败
+            }
+        }
     }
 
     // 新增：检查目标节点文件是否存在（需在每个dataServer实现"文件存在"接口）
@@ -547,5 +597,15 @@ public class DataService {
             // 检查失败时默认继续同步（避免漏同步）
             return false;
         }
+    }
+
+    // 新增：提供获取缓存副本位置的方法
+    public List<String> getCachedReplicaLocations(String path) {
+        return fileReplicaCache.getOrDefault(path, new ArrayList<>());
+    }
+
+    // 新增：删除文件后清理缓存
+    public void removeReplicaCache(String path) {
+        fileReplicaCache.remove(path);
     }
 }

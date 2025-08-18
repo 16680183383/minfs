@@ -1,6 +1,7 @@
 package com.example.dataserver.controller;
 
 import com.example.dataserver.services.DataService;
+import com.example.dataserver.services.FileDeleteService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -8,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,8 @@ public class DataController {
 
     @Autowired
     private DataService dataService;
+    @Autowired
+    private FileDeleteService fileDeleteService;
 
     /**
      * 1、读取request content内容并保存在本地磁盘下的文件内
@@ -81,7 +85,7 @@ public class DataController {
             @RequestParam int length) {
         try {
             // 调用服务层读取数据
-            byte[] data = dataService.read(path, offset, length);
+            byte[] data = dataService.readWithChunk(path);
 
             // 若数据为空，返回404
             if (data == null) {
@@ -113,6 +117,84 @@ public class DataController {
             return ResponseEntity.ok(exists);
         } catch (Exception e) {
             return ResponseEntity.ok(false);
+        }
+    }
+
+    /**
+     * 副本节点接收MD5清单并写入本地
+     * 接口功能：接收主节点同步的MD5清单数据，生成本地MD5清单文件（与主节点路径一致）
+     * @param path MD5清单的目标路径（如/test/4.txt/md5_list.txt）
+     * @param fileSystemName 文件系统标识（与主节点一致，如"minfs"）
+     * @param request 用于读取请求体中的MD5清单二进制数据
+     * @return 写入结果
+     */
+    @RequestMapping(value = "writeMd5List", method = RequestMethod.POST)
+    public ResponseEntity<Map<String, Object>> writeMd5List(
+            @RequestParam String path,
+            @RequestHeader String fileSystemName,
+            @RequestHeader(required = false) String xIsReplicaSync,
+            HttpServletRequest request) {
+        try {
+            // 1. 读取请求体中的MD5清单数据（主节点同步过来的二进制数据）
+            byte[] md5ListData = request.getInputStream().readAllBytes();
+            if (md5ListData.length == 0) {
+                throw new IllegalArgumentException("MD5清单数据为空");
+            }
+
+            // 2. 调用服务层方法，将MD5清单写入本地指定路径
+            // （路径格式与主节点一致，确保后续读取时能匹配）
+            dataService.writeMd5ListToLocal(path, md5ListData);
+
+            // 3. 构造成功响应（符合文档"接口需反馈结果"的隐含要求）
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "MD5清单写入成功");
+            result.put("md5ListPath", path);
+            return new ResponseEntity<>(result, HttpStatus.OK);
+
+        } catch (IOException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "MD5清单写入失败：" + e.getMessage());
+            return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "MD5清单处理失败：" + e.getMessage());
+            return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @RequestMapping(value = "delete", method = RequestMethod.DELETE)
+    public ResponseEntity<Map<String, Object>> deleteFile(
+            @RequestHeader String fileSystemName,
+            @RequestParam String path,
+            @RequestHeader(value = "X-Is-Replica-Sync", required = false) String xIsReplicaSync) {
+        try {
+            // 判断是否为副本同步请求（与写入接口保持一致的标识逻辑）
+            boolean isReplicaSync = "true".equalsIgnoreCase(xIsReplicaSync);
+
+            // 调用文件删除服务执行删除逻辑
+            // 注意：如果是副本同步请求，可能需要调整删除逻辑（例如不触发级联删除）
+            boolean allDeleted = fileDeleteService.deleteFile(path, isReplicaSync);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", allDeleted);
+            result.put("message", allDeleted ? "Delete success" : "Partial replicas deleted");
+            return new ResponseEntity<>(result, HttpStatus.OK);
+        } catch (Exception e) {
+            String errorMsg = "删除失败：" + e.getMessage();
+            // 针对常见异常场景优化提示信息
+            if (e.getMessage().contains("未找到文件的副本信息")) {
+                errorMsg = "删除失败：文件不存在或元数据信息缺失";
+            } else if (e.getMessage().contains("本地文件删除失败")) {
+                errorMsg = "删除失败：本地文件删除异常";
+            }
+
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", errorMsg);
+            return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
