@@ -14,7 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -233,7 +233,7 @@ public class MetaController {
     /**
      * 列出目录内容
      */
-    @RequestMapping("listStatus")
+    @RequestMapping("listdir")
     public ResponseEntity<List<StatInfo>> listdir(@RequestParam String path) {
         log.info("列出目录内容: path={}", path);
         List<StatInfo> files = metaService.listFiles(path);
@@ -522,6 +522,19 @@ public class MetaController {
             m.put("path", s.getPath());
             m.put("type", s.getType().name());
             m.put("size", s.getSize());
+            if (s.getReplicaData() != null && !s.getReplicaData().isEmpty()) {
+                List<Map<String, Object>> replicas = s.getReplicaData().stream().map(r -> {
+                    Map<String, Object> rm = new HashMap<>();
+                    rm.put("id", r.id);
+                    rm.put("dsNode", r.dsNode);
+                    rm.put("path", r.path);
+                    rm.put("offset", r.offset);
+                    rm.put("length", r.length);
+                    rm.put("isPrimary", r.isPrimary);
+                    return rm;
+                }).toList();
+                m.put("replicas", replicas);
+            }
             return m;
         }).toList();
         return ResponseEntity.ok(Map.of("files", files));
@@ -536,6 +549,17 @@ public class MetaController {
         try {
             boolean ok = replicationService.applyReplication(ReplicationType.valueOf(type), path, payload == null ? Map.of() : payload);
             return ResponseEntity.ok(Map.of("success", ok));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    // 手动触发从Leader追赶一次（仅Follower有效）
+    @RequestMapping(value = "internal/catchup", method = RequestMethod.POST)
+    public ResponseEntity<Map<String, Object>> manualCatchup() {
+        try {
+            replicationService.catchUpFromLeaderIfNeeded();
+            return ResponseEntity.ok(Map.of("success", true));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
         }

@@ -45,6 +45,7 @@ public class ReplicationService {
 			if (list instanceof List) {
 				@SuppressWarnings("unchecked") List<Map<String, Object>> files = (List<Map<String, Object>>) list;
 				java.util.Set<String> snapshotPaths = new java.util.HashSet<>();
+				int filesWithReplicas = 0;
 				for (Map<String, Object> f : files) {
 					String path = String.valueOf(f.get("path"));
 					String type = String.valueOf(f.get("type"));
@@ -54,6 +55,30 @@ public class ReplicationService {
 					info.setType("Directory".equalsIgnoreCase(type) ? FileType.Directory : FileType.File);
 					info.setSize(sizeNum.longValue());
 					info.setMtime(System.currentTimeMillis());
+					Object reps = f.get("replicas");
+					if (reps instanceof java.util.List<?> repList) {
+						java.util.List<ReplicaData> replicaDataList = new java.util.ArrayList<>();
+						for (Object o : repList) {
+							if (o instanceof java.util.Map<?,?> m) {
+								ReplicaData r = new ReplicaData();
+								r.id = String.valueOf(m.get("id"));
+								r.dsNode = String.valueOf(m.get("dsNode"));
+								Object pathValue = m.get("path");
+								r.path = String.valueOf(pathValue != null ? pathValue : path);
+								Object off = m.get("offset");
+								Object len = m.get("length");
+								r.offset = off instanceof Number ? ((Number) off).intValue() : 0;
+								r.length = len instanceof Number ? ((Number) len).intValue() : 0;
+								Object pri = m.get("isPrimary");
+								r.isPrimary = pri instanceof Boolean ? (Boolean) pri : false;
+								replicaDataList.add(r);
+							}
+						}
+						info.setReplicaData(replicaDataList);
+						if (!replicaDataList.isEmpty()) {
+							filesWithReplicas++;
+						}
+					}
 					metadataStorageService.saveMetadata(path, info);
 					snapshotPaths.add(path);
 				}
@@ -64,7 +89,7 @@ public class ReplicationService {
 						metadataStorageService.deleteMetadata(s.getPath());
 					}
 				}
-				log.info("快照同步完成，共 {} 条", ((List<?>) list).size());
+				log.info("快照同步完成，共 {} 条，其中包含副本信息的文件: {}", ((List<?>) list).size(), filesWithReplicas);
 			}
 		} catch (Exception e) {
 			log.error("从Leader拉取快照失败", e);
@@ -134,7 +159,8 @@ public class ReplicationService {
 								ReplicaData r = new ReplicaData();
 								r.id = String.valueOf(m.get("id"));
 								r.dsNode = String.valueOf(m.get("dsNode"));
-								r.path = String.valueOf(m.getOrDefault("path", path));
+								Object pathValue = m.get("path");
+								r.path = String.valueOf(pathValue != null ? pathValue : path);
 								Object off = m.get("offset");
 								Object len = m.get("length");
 								r.offset = off instanceof Number ? ((Number) off).intValue() : 0;
@@ -150,7 +176,14 @@ public class ReplicationService {
 				}
 				case DELETE -> {
 					StatInfo existing = metadataStorageService.getMetadata(path);
-					if (existing != null && existing.getType() == FileType.Directory) {
+					if (existing == null) {
+						List<StatInfo> children = metadataStorageService.listDirectory(path);
+						if (children != null && !children.isEmpty()) {
+							deleteDirectoryRecursively(path);
+						} else {
+							metadataStorageService.deleteMetadata(path);
+						}
+					} else if (existing.getType() == FileType.Directory) {
 						deleteDirectoryRecursively(path);
 					} else {
 						metadataStorageService.deleteMetadata(path);

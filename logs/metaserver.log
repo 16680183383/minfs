@@ -1,0 +1,283 @@
+2025-08-18 11:01:34 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 on PSH-CHJM with PID 119188 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-18 11:01:34 [main] INFO  c.k.c.m.MetaServerApplication - No active profile set, falling back to 1 default profile: "default"
+2025-08-18 11:01:35 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port(s): 8000 (http)
+2025-08-18 11:01:35 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-18 11:01:35 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/9.0.74]
+2025-08-18 11:01:35 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-18 11:01:35 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1530 ms
+2025-08-18 11:01:36 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-18 11:01:36 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./rocksdb_metadata
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.s.MetadataStorageService - 文件系统路径缓存重建完成，共 0 个文件系统
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZK元数据服务成功连接到Zookeeper: localhost:2181
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8000 -> localhost:8000:active
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功成为leader: /minfs/leader/meta8000
+2025-08-18 11:01:37 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port(s): 8000 (http) with context path ''
+2025-08-18 11:01:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:01:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:01:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 4.2 seconds (JVM running for 4.99)
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.services.RegistService - 成功连接到Zookeeper: localhost:2181
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.services.RegistService - MetaServer节点创建成功: /minfs/metaservers/meta-0000000022
+2025-08-18 11:01:37 [main] INFO  c.k.c.m.services.RegistService - MetaServer注册成功: 10.212.209.123:8000 -> /minfs/metaservers/meta-0000000022
+2025-08-18 11:03:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:03:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:03:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:05:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:05:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:05:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:07:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:07:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:07:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:09:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:09:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:09:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-18 11:11:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:11:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:11:37 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:19:55 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Client session timed out, have not heard from server in 497313ms for session id 0x1006a6b151c001d
+2025-08-18 11:19:55 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x1006a6b151c001d for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+org.apache.zookeeper.ClientCnxn$SessionTimeoutException: Client session timed out, have not heard from server in 497313ms for session id 0x1006a6b151c001d
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1257)
+2025-08-18 11:19:55 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x1006a6b151c001e for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+org.apache.zookeeper.ClientCnxn$EndOfStreamException: Unable to read additional data from server sessionid 0x1006a6b151c001e, likely server has closed socket
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doIO(ClientCnxnSocketNIO.java:77)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:350)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:19:55 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x1006a6b151c001c for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+org.apache.zookeeper.ClientCnxn$EndOfStreamException: Unable to read additional data from server sessionid 0x1006a6b151c001c, likely server has closed socket
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doIO(ClientCnxnSocketNIO.java:77)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:350)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:19:56 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Unable to reconnect to ZooKeeper service, session 0x1006a6b151c001d has expired
+2025-08-18 11:19:56 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x1006a6b151c001d for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+org.apache.zookeeper.ClientCnxn$SessionExpiredException: Unable to reconnect to ZooKeeper service, session 0x1006a6b151c001d has expired
+	at org.apache.zookeeper.ClientCnxn$SendThread.onConnected(ClientCnxn.java:1439)
+	at org.apache.zookeeper.ClientCnxnSocket.readConnectResult(ClientCnxnSocket.java:154)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doIO(ClientCnxnSocketNIO.java:86)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:350)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:19:56 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Unable to reconnect to ZooKeeper service, session 0x1006a6b151c001e has expired
+2025-08-18 11:19:56 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x1006a6b151c001e for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+org.apache.zookeeper.ClientCnxn$SessionExpiredException: Unable to reconnect to ZooKeeper service, session 0x1006a6b151c001e has expired
+	at org.apache.zookeeper.ClientCnxn$SendThread.onConnected(ClientCnxn.java:1439)
+	at org.apache.zookeeper.ClientCnxnSocket.readConnectResult(ClientCnxnSocket.java:154)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doIO(ClientCnxnSocketNIO.java:86)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:350)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:19:57 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Unable to reconnect to ZooKeeper service, session 0x1006a6b151c001c has expired
+2025-08-18 11:19:57 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x1006a6b151c001c for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+org.apache.zookeeper.ClientCnxn$SessionExpiredException: Unable to reconnect to ZooKeeper service, session 0x1006a6b151c001c has expired
+	at org.apache.zookeeper.ClientCnxn$SendThread.onConnected(ClientCnxn.java:1439)
+	at org.apache.zookeeper.ClientCnxnSocket.readConnectResult(ClientCnxnSocket.java:154)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doIO(ClientCnxnSocketNIO.java:86)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:350)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:20:54 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZK元数据服务已关闭
+2025-08-18 11:20:54 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-18 11:21:05 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 on PSH-CHJM with PID 129408 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-18 11:21:05 [main] INFO  c.k.c.m.MetaServerApplication - No active profile set, falling back to 1 default profile: "default"
+2025-08-18 11:21:06 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port(s): 8000 (http)
+2025-08-18 11:21:06 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-18 11:21:06 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/9.0.74]
+2025-08-18 11:21:06 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-18 11:21:06 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1061 ms
+2025-08-18 11:21:06 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.SocketException: Connection reset
+	at java.base/sun.nio.ch.SocketChannelImpl.throwConnectionReset(SocketChannelImpl.java:394)
+	at java.base/sun.nio.ch.SocketChannelImpl.read(SocketChannelImpl.java:426)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doIO(ClientCnxnSocketNIO.java:74)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:350)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:08 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:09 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:11 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:13 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:15 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:17 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:19 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:21 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:22 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:24 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/[0:0:0:0:0:0:0:1]:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:25 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:26 [main-SendThread(localhost:2181)] WARN  org.apache.zookeeper.ClientCnxn - Session 0x0 for server localhost/127.0.0.1:2181, Closing socket connection. Attempting reconnect except it is a SessionExpiredException.
+java.net.ConnectException: Connection refused: no further information
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672)
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:946)
+	at org.apache.zookeeper.ClientCnxnSocketNIO.doTransport(ClientCnxnSocketNIO.java:344)
+	at org.apache.zookeeper.ClientCnxn$SendThread.run(ClientCnxn.java:1289)
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./rocksdb_metadata
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.s.MetadataStorageService - 文件系统路径缓存重建完成，共 0 个文件系统
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZK元数据服务成功连接到Zookeeper: localhost:2181
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8000 -> localhost:8000:active
+2025-08-18 11:21:28 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功成为leader: /minfs/leader/meta8000
+2025-08-18 11:21:29 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port(s): 8000 (http) with context path ''
+2025-08-18 11:21:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:21:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:21:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:21:29 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 24.708 seconds (JVM running for 25.615)
+2025-08-18 11:21:29 [main] INFO  c.k.c.m.services.RegistService - 成功连接到Zookeeper: localhost:2181
+2025-08-18 11:21:29 [main] INFO  c.k.c.m.services.RegistService - MetaServer节点创建成功: /minfs/metaservers/meta-0000000024
+2025-08-18 11:21:29 [main] INFO  c.k.c.m.services.RegistService - MetaServer注册成功: 10.212.209.123:8000 -> /minfs/metaservers/meta-0000000024
+2025-08-18 11:23:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:23:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:23:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:25:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:25:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:25:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:27:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:27:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:27:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:29:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:29:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:29:29 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-18 11:29:52 [main-EventThread] WARN  c.k.c.m.services.ZkMetaServerService - Leader节点被删除，重新启动leader选举
+2025-08-18 11:29:53 [main-EventThread] ERROR c.k.c.m.services.ZkMetaServerService - 尝试成为leader失败
+org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = Session expired for /minfs/leader/meta8000
+	at org.apache.zookeeper.KeeperException.create(KeeperException.java:134)
+	at org.apache.zookeeper.KeeperException.create(KeeperException.java:54)
+	at org.apache.zookeeper.ZooKeeper.create(ZooKeeper.java:1347)
+	at com.ksyun.campus.metaserver.services.ZkMetaServerService.tryBecomeLeader(ZkMetaServerService.java:114)
+	at com.ksyun.campus.metaserver.services.ZkMetaServerService$3.process(ZkMetaServerService.java:160)
+	at org.apache.zookeeper.ClientCnxn$EventThread.processEvent(ClientCnxn.java:579)
+	at org.apache.zookeeper.ClientCnxn$EventThread.run(ClientCnxn.java:554)
+2025-08-18 11:29:53 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZK元数据服务已关闭
+2025-08-18 11:29:53 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-18 11:30:02 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 on PSH-CHJM with PID 134280 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-18 11:30:02 [main] INFO  c.k.c.m.MetaServerApplication - No active profile set, falling back to 1 default profile: "default"
+2025-08-18 11:30:03 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port(s): 8000 (http)
+2025-08-18 11:30:03 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-18 11:30:03 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/9.0.74]
+2025-08-18 11:30:04 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-18 11:30:04 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1228 ms
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./rocksdb_metadata
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.s.MetadataStorageService - 文件系统路径缓存重建完成，共 0 个文件系统
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8000 -> localhost:8000:active:1755487804561
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功成为leader: /minfs/leader/meta8000
+2025-08-18 11:30:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-18 11:30:05 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port(s): 8000 (http) with context path ''
+2025-08-18 11:30:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:30:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:30:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:30:05 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 3.079 seconds (JVM running for 4.248)
+2025-08-18 11:30:05 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8000
+2025-08-18 11:32:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:32:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:32:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-18 11:32:22 [main-EventThread] WARN  c.k.c.m.services.ZkMetaServerService - Leader节点被删除，重新启动leader选举
+2025-08-18 11:32:22 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-18 11:32:22 [main-EventThread] ERROR c.k.c.m.services.ZkMetaServerService - 尝试成为leader失败
+org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = Session expired for /minfs/leader/meta8000
+	at org.apache.zookeeper.KeeperException.create(KeeperException.java:134)
+	at org.apache.zookeeper.KeeperException.create(KeeperException.java:54)
+	at org.apache.zookeeper.ZooKeeper.create(ZooKeeper.java:1347)
+	at com.ksyun.campus.metaserver.services.ZkMetaServerService.tryBecomeLeader(ZkMetaServerService.java:141)
+	at com.ksyun.campus.metaserver.services.ZkMetaServerService$3.process(ZkMetaServerService.java:187)
+	at org.apache.zookeeper.ClientCnxn$EventThread.processEvent(ClientCnxn.java:579)
+	at org.apache.zookeeper.ClientCnxn$EventThread.run(ClientCnxn.java:554)
+2025-08-18 11:32:22 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-18 11:43:01 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 on PSH-CHJM with PID 119908 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-18 11:43:01 [main] INFO  c.k.c.m.MetaServerApplication - No active profile set, falling back to 1 default profile: "default"
+2025-08-18 11:43:03 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port(s): 8000 (http)
+2025-08-18 11:43:03 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-18 11:43:03 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/9.0.74]
+2025-08-18 11:43:03 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-18 11:43:03 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1186 ms
+2025-08-18 11:43:03 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-18 11:43:03 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-18 11:43:04 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./rocksdb_metadata
+2025-08-18 11:43:04 [main] INFO  c.k.c.m.s.MetadataStorageService - 文件系统路径缓存重建完成，共 0 个文件系统
+2025-08-18 11:43:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-18 11:43:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8000 -> localhost:8000:active:1755488584916
+2025-08-18 11:43:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功成为leader: /minfs/leader/meta8000
+2025-08-18 11:43:04 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-18 11:43:05 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port(s): 8000 (http) with context path ''
+2025-08-18 11:43:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-18 11:43:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查文件系统 default 中的 0 个文件
+2025-08-18 11:43:05 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 文件系统 default FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-18 11:43:05 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 3.953 seconds (JVM running for 5.17)
+2025-08-18 11:43:05 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8000
+2025-08-18 11:44:48 [main-EventThread] WARN  c.k.c.m.services.ZkMetaServerService - Leader节点被删除，重新启动leader选举
+2025-08-18 11:44:49 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-18 11:44:49 [main-EventThread] ERROR c.k.c.m.services.ZkMetaServerService - 尝试成为leader失败
+org.apache.zookeeper.KeeperException$SessionExpiredException: KeeperErrorCode = Session expired for /minfs/leader/meta8000
+	at org.apache.zookeeper.KeeperException.create(KeeperException.java:134)
+	at org.apache.zookeeper.KeeperException.create(KeeperException.java:54)
+	at org.apache.zookeeper.ZooKeeper.create(ZooKeeper.java:1347)
+	at com.ksyun.campus.metaserver.services.ZkMetaServerService.tryBecomeLeader(ZkMetaServerService.java:141)
+	at com.ksyun.campus.metaserver.services.ZkMetaServerService$3.process(ZkMetaServerService.java:187)
+	at org.apache.zookeeper.ClientCnxn$EventThread.processEvent(ClientCnxn.java:579)
+	at org.apache.zookeeper.ClientCnxn$EventThread.run(ClientCnxn.java:554)
+2025-08-18 11:44:49 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭

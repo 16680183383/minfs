@@ -248,6 +248,117 @@ public class DataServerClientService {
             return errorResult;
         }
     }
+
+    /**
+     * 直接向指定 DataServer 写入数据，携带副本同步标记，避免被对端继续级联复制。
+     */
+    public boolean writeDirectToDataServer(String dsAddress, String path, int offset, int length, byte[] data) {
+        try {
+            String url = "http://" + dsAddress + "/write";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+            headers.set("X-Is-Replica-Sync", "true");
+
+            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
+            String queryParams = String.format("?path=%s&offset=%d&length=%d", encodedPath, offset, length);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url + queryParams,
+                    HttpMethod.POST,
+                    new HttpEntity<>(data, headers),
+                    String.class
+            );
+            boolean ok = response.getStatusCode().is2xxSuccessful();
+            if (ok) {
+                dataServerStatus.put(dsAddress, true);
+            }
+            return ok;
+        } catch (Exception e) {
+            log.error("直接写入DataServer失败: {} -> {}", dsAddress, path, e);
+            return false;
+        }
+    }
+
+    /**
+     * 调用DataServer检查文件是否存在（检查第一个分块）
+     */
+    public boolean checkFileExistsOnDataServer(String dsAddress, String path) {
+        try {
+            // 对路径进行URL编码，确保特殊字符正确传递
+            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
+            String url = "http://" + dsAddress + "/checkFileExists?path=" + encodedPath;
+            ResponseEntity<Boolean> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    Boolean.class
+            );
+            return response.getStatusCode().is2xxSuccessful() && Boolean.TRUE.equals(response.getBody());
+        } catch (Exception e) {
+            log.warn("检查副本是否存在失败: {} -> {}", dsAddress, path, e);
+            return false;
+        }
+    }
+
+    /**
+     * 从指定DataServer读取文件的全部数据（简化：服务端忽略offset/length，返回完整内容）
+     */
+    public byte[] readFromDataServer(String dsAddress, String path) {
+        try {
+            // 对路径进行URL编码，确保特殊字符正确传递
+            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
+            String url = "http://" + dsAddress + "/read?path=" + encodedPath + "&offset=0&length=-1";
+            ResponseEntity<byte[]> resp = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    byte[].class
+            );
+            if (resp.getStatusCode().is2xxSuccessful()) {
+                return resp.getBody();
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("从DataServer读取文件失败: {} -> {}", dsAddress, path, e);
+            return null;
+        }
+    }
+
+    /**
+     * 将数据作为副本写入到指定DataServer（带副本同步标记，避免二次级联）
+     */
+    public boolean writeReplicaToDataServer(String dsAddress, String path, byte[] data) {
+        try {
+            // 对路径进行URL编码，确保特殊字符正确传递
+            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
+            String url = "http://" + dsAddress + "/write?path=" + encodedPath + "&offset=0&length=" + (data == null ? 0 : data.length);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Is-Replica-Sync", "true");
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(data, headers),
+                    String.class
+            );
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.error("写入副本到DataServer失败: {} -> {}", dsAddress, path, e);
+            return false;
+        }
+    }
+
+    /**
+     * 在两个DataServer之间复制文件（源读取，目标写入为副本）
+     */
+    public boolean replicateBetweenDataServers(String sourceAddress, String targetAddress, String path) {
+        byte[] data = readFromDataServer(sourceAddress, path);
+        if (data == null || data.length == 0) {
+            log.warn("源DataServer返回空数据，放弃复制: {} -> {} ({})", sourceAddress, targetAddress, path);
+            return false;
+        }
+        return writeReplicaToDataServer(targetAddress, path, data);
+    }
     
     /**
      * 从dataServer对象中提取地址信息

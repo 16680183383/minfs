@@ -71,6 +71,49 @@ public class MetaService {
         statInfo.setMtime(System.currentTimeMillis());
         statInfo.setType(type);
         
+        // 如果是普通文件，选择三台DataServer并设置副本信息（不实际创建文件）
+        if (type == FileType.File) {
+            try {
+                // 选择三台DataServer（轮询 + 剩余容量权重）
+                List<Map<String, Object>> allActive = new ArrayList<>(zkDataServerService.getActiveDataServers());
+                if (allActive.size() < 1) {
+                    throw new RuntimeException("没有可用的DataServer");
+                }
+                
+                // 按剩余容量排序
+                allActive.sort((a, b) -> Long.compare(
+                        ((Number) b.getOrDefault("totalCapacity", b.getOrDefault("capacity", 0L))).longValue() -
+                                ((Number) b.getOrDefault("usedCapacity", 0L)).longValue(),
+                        ((Number) a.getOrDefault("totalCapacity", a.getOrDefault("capacity", 0L))).longValue() -
+                                ((Number) a.getOrDefault("usedCapacity", 0L)).longValue()
+                ));
+                
+                // 轮询选择三台DataServer
+                int start = Math.floorMod(roundRobinCounter.getAndIncrement(), Math.max(1, allActive.size()));
+                List<String> targets = new ArrayList<>();
+                for (int i = 0; i < Math.min(3, allActive.size()); i++) {
+                    Map<String, Object> ds = allActive.get((start + i) % allActive.size());
+                    Object addr = ds.get("address");
+                    if (addr != null) {
+                        targets.add(String.valueOf(addr));
+                    }
+                }
+                
+                if (targets.isEmpty()) {
+                    throw new RuntimeException("无法选择到目标DataServer");
+                }
+                
+                // 设置副本信息（不实际创建文件）
+                List<ReplicaData> replicaDataList = convertToReplicaData(path, targets, 0, 0);
+                statInfo.setReplicaData(replicaDataList);
+                log.info("创建文件成功: {}, 选择的三副本位置: {}", path, targets);
+                
+            } catch (Exception e) {
+                log.error("创建文件时选择DataServer失败: {}", path, e);
+                // 即使选择失败，也要保存元数据，后续write时可以重试
+            }
+        }
+
         // 保存到RocksDB和内存缓存
         metadataStorage.saveMetadata(path, statInfo);
         
@@ -89,40 +132,67 @@ public class MetaService {
                 log.info("文件不存在，先创建文件: {}", path);
                 statInfo = createFile(path, FileType.File);
             }
-            
-            // 2. 选择DataServer进行写入
-            Object selectedDataServer = pickDataServer();
-            if (selectedDataServer == null) {
-                throw new RuntimeException("没有可用的DataServer");
-            }
-            
-            // 3. 调用DataServer的write接口
-            Map<String, Object> writeResult = dataServerClient.writeToDataServer(
-                selectedDataServer, path, offset, length, data);
-            
-            if (!(Boolean) writeResult.get("success")) {
-                throw new RuntimeException("DataServer写入失败: " + writeResult.get("message"));
-            }
-            
-            // 4. 获取并记录副本位置信息
-            @SuppressWarnings("unchecked")
-            List<String> replicaLocations = (List<String>) writeResult.get("replicaLocations");
-            if (replicaLocations != null && !replicaLocations.isEmpty()) {
-                // 将副本位置转换为ReplicaData格式
-                List<ReplicaData> replicaDataList = convertToReplicaData(path, replicaLocations, offset, length);
-                statInfo.setReplicaData(replicaDataList);
+
+            // 2. 优先使用已存在的副本位置，如果没有则重新选择
+            List<String> targets = new ArrayList<>();
+            if (statInfo.getReplicaData() != null && !statInfo.getReplicaData().isEmpty()) {
+                // 使用已存在的副本位置
+                for (ReplicaData replica : statInfo.getReplicaData()) {
+                    targets.add(replica.dsNode);
+                }
+                log.info("使用已存在的副本位置: {}", targets);
+            } else {
+                // 重新选择三台DataServer（轮询 + 剩余容量权重）
+                List<Map<String, Object>> allActive = new ArrayList<>(zkDataServerService.getActiveDataServers());
+                if (allActive.size() < 1) {
+                    throw new RuntimeException("没有可用的DataServer");
+                }
                 
-                // 更新文件大小
-                statInfo.setSize(offset + length);
-                statInfo.setMtime(System.currentTimeMillis());
+                // 按剩余容量排序
+                allActive.sort((a, b) -> Long.compare(
+                        ((Number) b.getOrDefault("totalCapacity", b.getOrDefault("capacity", 0L))).longValue() -
+                                ((Number) b.getOrDefault("usedCapacity", 0L)).longValue(),
+                        ((Number) a.getOrDefault("totalCapacity", a.getOrDefault("capacity", 0L))).longValue() -
+                                ((Number) a.getOrDefault("usedCapacity", 0L)).longValue()
+                ));
                 
-                // 保存更新后的元数据
-                metadataStorage.saveMetadata(path, statInfo);
+                // 轮询选择三台DataServer
+                int start = Math.floorMod(roundRobinCounter.getAndIncrement(), Math.max(1, allActive.size()));
+                for (int i = 0; i < Math.min(3, allActive.size()); i++) {
+                    Map<String, Object> ds = allActive.get((start + i) % allActive.size());
+                    Object addr = ds.get("address");
+                    if (addr != null) {
+                        targets.add(String.valueOf(addr));
+                    }
+                }
                 
-                log.info("写入文件成功: {}, 大小: {}, 副本位置: {}", 
-                        path, statInfo.getSize(), replicaLocations);
+                if (targets.isEmpty()) {
+                    throw new RuntimeException("无法选择到目标DataServer");
+                }
+                
+                log.info("重新选择DataServer: {}", targets);
             }
-            
+
+            // 3. 依次写入三台（第一台作为主副本）
+            List<String> successLocations = new ArrayList<>();
+            for (String addr : targets) {
+                boolean ok = dataServerClient.writeDirectToDataServer(addr, path, offset, length, data);
+                if (ok) {
+                    successLocations.add(addr);
+                }
+            }
+            if (successLocations.isEmpty()) {
+                throw new RuntimeException("三副本写入均失败");
+            }
+
+            // 4. 更新副本信息与元数据
+            List<ReplicaData> replicaDataList = convertToReplicaData(path, successLocations, offset, length);
+            statInfo.setReplicaData(replicaDataList);
+            statInfo.setSize(Math.max(statInfo.getSize(), offset + length));
+            statInfo.setMtime(System.currentTimeMillis());
+            metadataStorage.saveMetadata(path, statInfo);
+            log.info("写入文件成功: {}, 大小: {}, 副本位置: {}", path, statInfo.getSize(), successLocations);
+
             return statInfo;
             
         } catch (Exception e) {
@@ -192,7 +262,17 @@ public class MetaService {
      */
     public boolean deleteFile(String path) {
         StatInfo statInfo = getFile(path);
+        // 若目录元数据不存在，但存在子项，则按目录处理进行递归删除
         if (statInfo == null) {
+            List<StatInfo> childrenIfAny = listFiles(path);
+            if (childrenIfAny != null && !childrenIfAny.isEmpty()) {
+                log.info("目录元数据缺失，但检测到子项，按目录递归删除: {} ({} 个子项)", path, childrenIfAny.size());
+                boolean ok = deleteDirectoryRecursively(path);
+                if (ok) {
+                    log.info("成功删除目录(按隐式目录处理): {}", path);
+                }
+                return ok;
+            }
             log.warn("文件/目录不存在: {}", path);
             return false;
         }
@@ -207,8 +287,14 @@ public class MetaService {
                     return false;
                 }
             } else {
-                // 文件删除：DataServer会自动管理副本删除，这里只删除元数据
-                log.info("删除文件: {}, 元数据删除", path);
+                // 文件删除：先通知 DataServer 删除实际数据，再删除元数据
+                List<ReplicaData> replicas = statInfo.getReplicaData();
+                if (replicas != null && !replicas.isEmpty()) {
+                    int deletedCount = dataServerClient.deleteFromMultipleDataServers(replicas);
+                    log.info("删除文件: {}, 在DataServer上成功删除: {}/{}", path, deletedCount, replicas.size());
+                } else {
+                    log.info("删除文件: {}, 无副本信息，直接删除元数据", path);
+                }
             }
             
             // 删除成功后，从RocksDB和内存缓存中删除元数据
