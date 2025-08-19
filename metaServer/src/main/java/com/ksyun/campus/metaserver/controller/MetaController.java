@@ -551,49 +551,7 @@ public class MetaController {
         Map<String, Object> results = fsckServices.getFsckResults();
         return ResponseEntity.ok(results);
     }
-    
-    /**
-     * 获取FSCK检查结果
-     */
-    @RequestMapping("fsck/results")
-    public ResponseEntity<Map<String, Object>> getFsckResults() {
-        log.info("获取FSCK检查结果");
-        Map<String, Object> results = fsckServices.getFsckResults();
-        return ResponseEntity.ok(results);
-    }
-    
-    /**
-     * 获取元数据存储状态
-     */
-    @RequestMapping("metadata/stats")
-    public ResponseEntity<Map<String, Object>> getMetadataStats() {
-        log.info("获取元数据存储状态");
-        Map<String, String> stats = metadataStorage.getStats();
-        // 转换为Map<String, Object>以匹配返回类型
-        Map<String, Object> result = new HashMap<>(stats);
-        return ResponseEntity.ok(result);
-    }
-    
-    /**
-     * 获取文件系统列表
-     */
-    @RequestMapping("filesystems")
-    public ResponseEntity<Map<String, String>> getFileSystemList() {
-        log.info("获取存储信息");
-        Map<String, String> stats = metadataStorage.getStats();
-        return ResponseEntity.ok(stats);
-    }
-    
-    /**
-     * 获取指定文件系统统计信息
-     */
-    @RequestMapping("filesystem/stats")
-    public ResponseEntity<Map<String, Object>> getFileSystemStats() {
-        log.info("获取全局统计信息");
-        Map<String, Object> stats = metaService.getGlobalStats();
-        return ResponseEntity.ok(stats);
-    }
-    
+
     /**
      * 检查文件是否存在
      */
@@ -633,96 +591,6 @@ public class MetaController {
         List<StatInfo> allFiles = metaService.getAllFiles();
         return ResponseEntity.ok(allFiles);
     }
-    
-    /**
-     * 健康检查
-     */
-    @RequestMapping("health")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        log.info("健康检查");
-        Map<String, Object> health = new HashMap<>();
-        health.put("status", "healthy");
-        health.put("timestamp", System.currentTimeMillis());
-        health.put("service", "MetaServer");
-        
-        // 获取DataServer状态
-        Map<String, Object> dataServerStatus = metaService.getDataServerStatus();
-        health.put("dataServerStatus", dataServerStatus);
-        
-        return ResponseEntity.ok(health);
-    }
-    
-    /**
-     * 检查ZK注册状态
-     */
-    @RequestMapping("zk/check")
-    public ResponseEntity<Map<String, Object>> checkZkRegistration() {
-        log.info("检查ZK注册状态");
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            // 检查当前MetaServer信息
-            Map<String, Object> currentInfo = zkMetaServerService.getCurrentMetaServerInfo();
-            result.put("currentMetaServer", currentInfo);
-            
-            // 检查ZK连接状态
-            boolean zkConnected = zkMetaServerService.isZkConnected();
-            result.put("zkConnected", zkConnected);
-            
-            // 获取所有MetaServer节点
-            List<Map<String, Object>> allMetaServers = zkMetaServerService.getAllMetaServers();
-            result.put("allMetaServers", allMetaServers);
-            result.put("totalMetaServers", allMetaServers.size());
-            
-            result.put("status", "success");
-            result.put("timestamp", System.currentTimeMillis());
-            
-        } catch (Exception e) {
-            log.error("检查ZK注册状态失败", e);
-            result.put("status", "error");
-            result.put("error", e.getMessage());
-        }
-        
-        return ResponseEntity.ok(result);
-    }
-    
-    /**
-     * 获取ZK集群状态
-     */
-    @RequestMapping("zk/cluster")
-    public ResponseEntity<Map<String, Object>> getZkClusterStatus() {
-        log.info("获取ZK集群状态");
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            // 获取所有MetaServer节点
-            List<Map<String, Object>> allMetaServers = zkMetaServerService.getAllMetaServers();
-            
-            // 统计集群状态
-            long activeCount = allMetaServers.stream()
-                .filter(server -> "active".equals(server.get("status")))
-                .count();
-            
-            result.put("totalMetaServers", allMetaServers.size());
-            result.put("activeMetaServers", activeCount);
-            result.put("inactiveMetaServers", allMetaServers.size() - activeCount);
-            result.put("metaServers", allMetaServers);
-            
-            // 检查当前节点状态
-            Map<String, Object> currentInfo = zkMetaServerService.getCurrentMetaServerInfo();
-            result.put("currentNode", currentInfo);
-            
-            result.put("status", "success");
-            result.put("timestamp", System.currentTimeMillis());
-            
-        } catch (Exception e) {
-            log.error("获取ZK集群状态失败", e);
-            result.put("status", "error");
-            result.put("error", e.getMessage());
-        }
-        
-        return ResponseEntity.ok(result);
-    }
 
     // Leader导出快照，Follower用于重放
     @RequestMapping(value = "internal/snapshot", method = RequestMethod.GET)
@@ -751,7 +619,13 @@ public class MetaController {
         return ResponseEntity.ok(Map.of("files", files));
     }
 
-    // 内部复制接收接口（仅Follower调用）
+    /**
+     * 内部复制接收接口（仅Follower调用）
+     * @param type
+     * @param path
+     * @param payload
+     * @return
+     */
     @RequestMapping(value = "internal/replicate", method = RequestMethod.POST)
     public ResponseEntity<Map<String, Object>> internalReplicate(
             @RequestParam String type,
@@ -765,7 +639,10 @@ public class MetaController {
         }
     }
 
-    // 手动触发从Leader追赶一次（仅Follower有效）
+     /**
+     * 手动触发从Leader追赶一次（仅Follower有效）
+     * @return
+     */
     @RequestMapping(value = "internal/catchup", method = RequestMethod.POST)
     public ResponseEntity<Map<String, Object>> manualCatchup() {
         try {

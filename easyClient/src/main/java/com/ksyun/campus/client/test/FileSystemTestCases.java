@@ -649,6 +649,111 @@ public class FileSystemTestCases {
     }
 
     /**
+     * 测试用例8: FSCK副本自愈与脏副本清理
+     * 步骤：
+     * 1) 创建文件并写入
+     * 2) 打印当前副本位置
+     * 3) 提示手动停止一个DataServer（倒计时），然后触发一次FSCK，验证副本补齐到3
+     * 4) 提示手动恢复该DataServer（倒计时），再次触发FSCK，验证历史脏副本被清理（非分配节点不再存在该文件）
+     */
+    public void testCase8_FsckReplicaSelfHealingAndCleanup() {
+        System.out.println("=== 测试用例8: FSCK副本自愈与脏副本清理 ===");
+        try {
+            String dir = "/test_fsck";
+            String path = dir + "/fsck.txt";
+            System.out.println("8.1 创建目录与文件");
+            fileSystem.mkdir(dir);
+            FSOutputStream out = fileSystem.create(path);
+            String content = "FSCK HEAL & CLEAN TEST";
+            out.write(content.getBytes("UTF-8"));
+            out.close();
+
+            System.out.println("8.2 获取文件状态与当前副本");
+            StatInfo stat = fileSystem.getFileStats(path);
+            if (stat == null || stat.getReplicaData() == null) {
+                System.out.println("   获取副本失败，终止用例");
+                return;
+            }
+            java.util.Set<String> currentReplicas = new java.util.HashSet<>();
+            for (com.ksyun.campus.client.domain.ReplicaData r : stat.getReplicaData()) {
+                currentReplicas.add(r.dsNode);
+            }
+            System.out.println("   当前副本数: " + currentReplicas.size() + " -> " + currentReplicas);
+
+            System.out.println("8.3 请手动停止一个DataServer（倒计时30秒）...");
+            for (int i = 30; i >= 1; i--) {
+                System.out.print("   等待 " + i + " 秒\r");
+                try { Thread.sleep(1000); } catch (InterruptedException ignore) {}
+            }
+            System.out.println();
+
+            System.out.println("8.4 触发FSCK自愈（补齐到3副本）");
+            String meta = ((EFileSystem)fileSystem).getMetaServerAddress();
+            try {
+                com.ksyun.campus.client.util.HttpClientUtil.doGet(((EFileSystem)fileSystem).getHttpClient(), "http://" + meta + "/fsck/manual");
+                Thread.sleep(2000); // 略等
+            } catch (Exception e) {
+                System.out.println("   触发FSCK失败: " + e.getMessage());
+            }
+            StatInfo statAfterHeal = fileSystem.getFileStats(path);
+            java.util.Set<String> healedReplicas = new java.util.HashSet<>();
+            if (statAfterHeal != null && statAfterHeal.getReplicaData() != null) {
+                for (com.ksyun.campus.client.domain.ReplicaData r : statAfterHeal.getReplicaData()) healedReplicas.add(r.dsNode);
+            }
+            System.out.println("   自愈后副本数: " + healedReplicas.size() + " -> " + healedReplicas);
+            if (healedReplicas.size() != 3) {
+                System.out.println("   [警告] 自愈后副本数不为3，请检查集群活跃DataServer数量");
+            }
+
+            System.out.println("8.5 请手动恢复刚才停止的DataServer（倒计时30秒）...");
+            for (int i = 30; i >= 1; i--) {
+                System.out.print("   等待 " + i + " 秒\r");
+                try { Thread.sleep(1000); } catch (InterruptedException ignore) {}
+            }
+            System.out.println();
+
+            System.out.println("8.6 再次触发FSCK以清理历史脏副本");
+            try {
+                com.ksyun.campus.client.util.HttpClientUtil.doGet(((EFileSystem)fileSystem).getHttpClient(), "http://" + meta + "/fsck/manual");
+                Thread.sleep(2000);
+            } catch (Exception e) {
+                System.out.println("   触发FSCK失败: " + e.getMessage());
+            }
+
+            System.out.println("8.7 验证：非分配DataServer上不存在该文件（历史脏副本应被清理）");
+            ClusterInfo ci = fileSystem.getClusterInfo();
+            java.util.List<java.util.Map<String, Object>> dsList = (ci != null && ci.getDataServers() != null) ? ci.getDataServers() : java.util.Collections.emptyList();
+            int staleFound = 0;
+            for (java.util.Map<String, Object> ds : dsList) {
+                Object addr = ds.get("address");
+                if (addr == null) continue;
+                String a = String.valueOf(addr);
+                if (healedReplicas.contains(a)) continue; // 分配内副本，跳过
+                try {
+                    String url = "http://" + a + "/checkFileExists?path=" + path;
+                    String resp = com.ksyun.campus.client.util.HttpClientUtil.doGet(((EFileSystem)fileSystem).getHttpClient(), url);
+                    boolean exists = resp != null && resp.toLowerCase().contains("true");
+                    if (exists) {
+                        staleFound++;
+                        System.out.println("   [失败] 在未分配节点仍发现历史脏副本: " + a);
+                    }
+                } catch (Exception ignore) {}
+            }
+            if (staleFound == 0) {
+                System.out.println("   [成功] 未分配节点未发现历史脏副本");
+            }
+
+//            System.out.println("8.8 清理测试数据");
+//            try { fileSystem.delete(path); } catch (Exception ignore) {}
+//            try { fileSystem.delete(dir); } catch (Exception ignore) {}
+        } catch (Exception e) {
+            System.err.println("测试用例8执行失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+        System.out.println("=== 测试用例8完成 ===\n");
+    } 
+
+    /**
      * 运行所有测试用例
      */
     public void runAllTestCases() {
@@ -662,6 +767,8 @@ public class FileSystemTestCases {
         testCase6_PerformanceTest();
         // 高可用演示
         testCase7_HighAvailability();
+        // FSCK演示
+        testCase8_FsckReplicaSelfHealingAndCleanup();
         
         System.out.println("✅ 所有测试用例执行完成！");
     }

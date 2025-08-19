@@ -172,12 +172,109 @@ public class FsckServices {
             }
         }
 
-        // 3) 如有变化则更新元数据
+        // 3) 若有效副本超过3，执行过副本清理（删除多余副本并更新元数据）
+        if (validReplicas.size() > 3) {
+            boolean removed = cleanupOverReplicas(statInfo, validReplicas);
+            changed = changed || removed;
+        }
+
+        // 4) 清理历史脏数据：在未分配该文件副本的DataServer上，如果仍残留数据则删除
+        int staleDeleted = cleanupStaleReplicasNotInMetadata(statInfo, validReplicas);
+        if (staleDeleted > 0) {
+            log.info("清理历史脏副本: {} 个 ({})", staleDeleted, statInfo.getPath());
+        }
+
+        // 5) 如有变化则更新元数据
         if (changed) {
             statInfo.setReplicaData(validReplicas);
             metadataStorage.saveMetadata(statInfo.getPath(), statInfo);
         }
         return changed;
+    }
+
+    /**
+     * 过副本清理：保留主副本+前两个有效副本，其余删除并从元数据移除。
+     */
+    private boolean cleanupOverReplicas(StatInfo statInfo, List<ReplicaData> validReplicas) {
+        if (validReplicas == null || validReplicas.size() <= 3) return false;
+        List<ReplicaData> keep = new ArrayList<>(3);
+        // 先保留主副本
+        ReplicaData primary = validReplicas.stream().filter(r -> r.isPrimary).findFirst().orElse(null);
+        if (primary != null) {
+            keep.add(primary);
+        }
+        // 再按顺序补足到3个
+        for (ReplicaData r : validReplicas) {
+            if (keep.size() >= 3) break;
+            if (primary != null && r == primary) continue;
+            keep.add(r);
+        }
+        // 待移除列表
+        Set<String> keepSet = new HashSet<>();
+        for (ReplicaData r : keep) keepSet.add(r.dsNode);
+        List<ReplicaData> toRemove = new ArrayList<>();
+        for (ReplicaData r : validReplicas) {
+            if (!keepSet.contains(r.dsNode)) {
+                toRemove.add(r);
+            }
+        }
+        // 物理删除多余副本
+        int removedCount = 0;
+        for (ReplicaData r : toRemove) {
+            try {
+                boolean ok = dataServerClientService.deleteFileFromDataServer(r);
+                if (ok) removedCount++;
+                log.info("过副本清理，删除副本: {} -> {} 成功={} ", r.dsNode, statInfo.getPath(), ok);
+            } catch (Exception e) {
+                log.warn("过副本清理删除失败: {} -> {}", r.dsNode, statInfo.getPath(), e);
+            }
+        }
+        // 更新元数据中的副本列表为keep
+        if (!toRemove.isEmpty()) {
+            validReplicas.clear();
+            validReplicas.addAll(keep);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 历史脏数据清理：对于当前元数据未分配该文件副本的活跃DataServer，如存在该文件数据则删除。
+     * 返回清理数量。
+     */
+    private int cleanupStaleReplicasNotInMetadata(StatInfo statInfo, List<ReplicaData> currentReplicas) {
+        try {
+            Set<String> assigned = new HashSet<>();
+            if (currentReplicas != null) {
+                for (ReplicaData r : currentReplicas) assigned.add(r.dsNode);
+            }
+            int cleaned = 0;
+            List<Map<String, Object>> actives = zkDataServerService.getActiveDataServers();
+            for (Map<String, Object> s : actives) {
+                Object addrObj = s.get("address");
+                if (addrObj == null) continue;
+                String addr = String.valueOf(addrObj);
+                if (assigned.contains(addr)) continue; // 该节点是被分配副本的，跳过
+                boolean exists = false;
+                try {
+                    exists = dataServerClientService.checkFileExistsOnDataServer(addr, statInfo.getPath());
+                } catch (Exception e) {
+                    // 忽略探测异常
+                }
+                if (exists) {
+                    ReplicaData temp = new ReplicaData();
+                    temp.dsNode = addr;
+                    temp.path = statInfo.getPath();
+                    boolean ok = dataServerClientService.deleteFileFromDataServer(temp);
+                    if (ok) cleaned++;
+                    log.info("清理历史脏副本: {} -> {} 成功={} ", addr, statInfo.getPath(), ok);
+                }
+            }
+            return cleaned;
+        } catch (Exception e) {
+            log.warn("清理历史脏副本时出错: {}", statInfo.getPath(), e);
+            return 0;
+        }
     }
 
     /**

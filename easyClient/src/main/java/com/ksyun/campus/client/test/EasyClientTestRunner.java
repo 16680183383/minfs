@@ -41,7 +41,8 @@ public class EasyClientTestRunner {
                 System.out.println("未指定测试用例，默认运行所有测试用例...\n");
                 testCases.runAllTestCases();
             } else {
-                String testCase = args[0].toLowerCase();
+                //String testCase = args[0].toLowerCase();
+                String testCase = "7";
                 
                 switch (testCase) {
                     case "1":
