@@ -1,5 +1,8 @@
 package com.ksyun.campus.client.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DataServerMsg{
     private String host;
     private int port;

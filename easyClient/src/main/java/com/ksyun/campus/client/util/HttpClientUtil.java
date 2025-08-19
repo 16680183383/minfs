@@ -13,11 +13,21 @@ import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.io.SocketConfig;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
+import org.apache.hc.core5.http.ClassicHttpRequest;
+import org.apache.hc.core5.http.ClassicHttpResponse;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.support.ClassicRequestBuilder;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 
-import java.lang.reflect.Method;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import org.apache.hc.core5.http.ParseException;
 
 public class HttpClientUtil {
     private static HttpClient httpClient;
+    
     public static HttpClient createHttpClient(HttpClientConfig config) {
 
         int socketSendBufferSizeHint = config.getSocketSendBufferSizeHint();
@@ -53,5 +63,67 @@ public class HttpClientUtil {
                 .build();
         return httpClient;
 
+    }
+    
+    /**
+     * 执行GET请求
+     */
+    public static String doGet(HttpClient client, String url) throws IOException, ParseException {
+        ClassicHttpRequest request = ClassicRequestBuilder.get(url).build();
+        try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
+            HttpEntity entity = response.getEntity();
+            return entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : null;
+        }
+    }
+    
+    /**
+     * 执行POST请求，发送字节数组
+     */
+    public static String doPost(HttpClient client, String url, byte[] data) throws IOException, ParseException {
+        ClassicHttpRequest request = ClassicRequestBuilder.post(url)
+                .setEntity(new ByteArrayEntity(data, null))
+                .build();
+        try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
+            HttpEntity entity = response.getEntity();
+            return entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : null;
+        }
+    }
+    
+    /**
+     * 执行DELETE请求
+     */
+    public static String doDelete(HttpClient client, String url) throws IOException, ParseException {
+        ClassicHttpRequest request = ClassicRequestBuilder.delete(url).build();
+        try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
+            HttpEntity entity = response.getEntity();
+            return entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : null;
+        }
+    }
+    
+    /**
+     * 构建带查询参数的URL
+     */
+    public static String buildUrl(String baseUrl, Map<String, String> params) {
+        if (params == null || params.isEmpty()) {
+            return baseUrl;
+        }
+        
+        StringBuilder urlBuilder = new StringBuilder(baseUrl);
+        if (!baseUrl.contains("?")) {
+            urlBuilder.append("?");
+        } else if (!baseUrl.endsWith("&") && !baseUrl.endsWith("?")) {
+            urlBuilder.append("&");
+        }
+        
+        boolean first = true;
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            if (!first) {
+                urlBuilder.append("&");
+            }
+            urlBuilder.append(entry.getKey()).append("=").append(entry.getValue());
+            first = false;
+        }
+        
+        return urlBuilder.toString();
     }
 }

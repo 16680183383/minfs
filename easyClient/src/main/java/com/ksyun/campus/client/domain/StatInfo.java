@@ -1,7 +1,9 @@
 package com.ksyun.campus.client.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class StatInfo
 {
     public String path;

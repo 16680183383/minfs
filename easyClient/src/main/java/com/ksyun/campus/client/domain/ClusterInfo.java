@@ -1,7 +1,9 @@
 package com.ksyun.campus.client.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ClusterInfo {
     private MetaServerMsg masterMetaServer;
     private MetaServerMsg slaveMetaServer;

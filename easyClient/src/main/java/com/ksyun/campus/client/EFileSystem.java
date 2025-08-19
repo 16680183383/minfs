@@ -2,34 +2,256 @@ package com.ksyun.campus.client;
 
 import com.ksyun.campus.client.domain.ClusterInfo;
 import com.ksyun.campus.client.domain.StatInfo;
+import com.ksyun.campus.client.util.HttpClientUtil;
+import com.ksyun.campus.client.util.ZkUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hc.client5.http.classic.HttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.core5.http.io.SocketConfig;
+import org.apache.hc.core5.util.Timeout;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
-public class EFileSystem extends FileSystem{
-
-    public EFileSystem() {
-        this("default");
+/**
+ * easyClient 文件系统实现类
+ * 提供完整的分布式文件系统操作接口
+ */
+public class EFileSystem extends FileSystem {
+    
+    private ZkUtil zkUtil;
+    private HttpClient httpClient;
+    private ObjectMapper objectMapper;
+    private String defaultMetaServerAddress;
+    
+    /**
+     * 构造函数
+     * @param defaultFileSystemName 默认文件系统名称
+     */
+    public EFileSystem(String defaultFileSystemName) {
+        super.defaultFileSystemName = defaultFileSystemName;
+        initializeComponents();
     }
-
-    public EFileSystem(String fileSystemName) {
-        this.defaultFileSystemName = fileSystemName;
+    
+    /**
+     * 初始化组件
+     */
+    private void initializeComponents() {
+        try {
+            // 初始化Zookeeper工具
+            zkUtil = new ZkUtil();
+            zkUtil.connectToZookeeper();
+            
+            // 初始化HTTP客户端
+            httpClient = createHttpClient();
+            
+            // 初始化JSON处理器
+            objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            
+            // 获取默认MetaServer地址
+            List<String> metaServerAddresses = zkUtil.getMetaServerAddresses();
+            if (metaServerAddresses != null && !metaServerAddresses.isEmpty()) {
+                defaultMetaServerAddress = metaServerAddresses.get(0);
+            } else {
+                defaultMetaServerAddress = "localhost:8000"; // 默认地址
+            }
+            
+        } catch (Exception e) {
+            throw new RuntimeException("初始化文件系统失败: " + e.getMessage(), e);
+        }
     }
-
-    public FSInputStream open(String path){
-        return null;
+    
+    /**
+     * 创建HTTP客户端
+     */
+    private HttpClient createHttpClient() {
+        PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+        connectionManager.setMaxTotal(100);
+        connectionManager.setDefaultMaxPerRoute(20);
+        
+        return HttpClients.custom()
+                .setConnectionManager(connectionManager)
+                .build();
     }
-    public FSOutputStream create(String path){
-        return null;
+    
+    /**
+     * 获取MetaServer地址
+     */
+    private String getMetaServerAddress() {
+        try {
+            List<String> addresses = zkUtil.getMetaServerAddresses();
+            if (addresses != null && !addresses.isEmpty()) {
+                return addresses.get(0);
+            }
+        } catch (Exception e) {
+            // 使用默认地址
+        }
+        return defaultMetaServerAddress;
     }
-    public boolean mkdir(String path){return false;}
-    public boolean delete(String path){return false;}
-    public StatInfo getFileStats(String path){
-        return null;
+    
+    @Override
+    public FSInputStream open(String path) throws IOException {
+        try {
+            // 获取文件状态
+            StatInfo statInfo = getFileStats(path);
+            if (statInfo == null) {
+                throw new IOException("文件不存在: " + path);
+            }
+            
+            return new FSInputStream(statInfo, this);
+        } catch (Exception e) {
+            throw new IOException("打开文件失败: " + path, e);
+        }
     }
-    public List<StatInfo> listFileStats(String path){
-        return null;
+    
+    @Override
+    public FSOutputStream create(String path) throws IOException {
+        try {
+            // 创建空文件
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/create?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            
+            String response = HttpClientUtil.doGet(httpClient, url);
+            if (response == null || response.contains("error")) {
+                throw new IOException("创建文件失败: " + path);
+            }
+            
+            return new FSOutputStream(path, this);
+        } catch (Exception e) {
+            throw new IOException("创建文件失败: " + path, e);
+        }
     }
-    public ClusterInfo getClusterInfo(){
-        return null;
+    
+    @Override
+    public boolean mkdir(String path) throws IOException {
+        try {
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/mkdir?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            
+            String response = HttpClientUtil.doGet(httpClient, url);
+            return response != null && !response.contains("error");
+        } catch (Exception e) {
+            throw new IOException("创建目录失败: " + path, e);
+        }
+    }
+    
+    @Override
+    public boolean delete(String path) throws IOException {
+        try {
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/delete?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            
+            String response = HttpClientUtil.doDelete(httpClient, url);
+            return response != null && !response.contains("error");
+        } catch (Exception e) {
+            throw new IOException("删除失败: " + path, e);
+        }
+    }
+    
+    @Override
+    public StatInfo getFileStats(String path) throws IOException {
+        try {
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/stats?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            
+            String response = HttpClientUtil.doGet(httpClient, url);
+            if (response != null && !response.contains("error")) {
+                return objectMapper.readValue(response, StatInfo.class);
+            }
+            return null;
+        } catch (Exception e) {
+            throw new IOException("获取文件状态失败: " + path, e);
+        }
+    }
+    
+    @Override
+    public List<StatInfo> listFileStats(String path) throws IOException {
+        try {
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/listdir?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            
+            String response = HttpClientUtil.doGet(httpClient, url);
+            if (response != null && !response.contains("error")) {
+                return objectMapper.readValue(response, 
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, StatInfo.class));
+            }
+            return null;
+        } catch (Exception e) {
+            throw new IOException("列出文件失败: " + path, e);
+        }
+    }
+    
+    @Override
+    public ClusterInfo getClusterInfo() throws IOException {
+        try {
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/cluster/info";
+            
+            String response = HttpClientUtil.doGet(httpClient, url);
+            if (response != null && !response.contains("error")) {
+                return objectMapper.readValue(response, ClusterInfo.class);
+            }
+            return null;
+        } catch (Exception e) {
+            throw new IOException("获取集群信息失败", e);
+        }
+    }
+    
+    @Override
+    public boolean exists(String path) throws IOException {
+        try {
+            StatInfo statInfo = getFileStats(path);
+            return statInfo != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * 写入文件内容
+     * @param path 文件路径
+     * @param data 文件数据
+     * @throws IOException 写入失败时抛出
+     */
+    public void writeFile(String path, byte[] data) throws IOException {
+        try {
+            String metaServerAddress = getMetaServerAddress();
+            String url = "http://" + metaServerAddress + "/write?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8) + "&offset=0&length=" + data.length;
+            
+            String response = HttpClientUtil.doPost(httpClient, url, data);
+            if (response == null || response.contains("error")) {
+                throw new IOException("写入文件失败: " + path);
+            }
+        } catch (Exception e) {
+            throw new IOException("写入文件失败: " + path, e);
+        }
+    }
+    
+    /**
+     * 获取HTTP客户端实例
+     */
+    public HttpClient getHttpClient() {
+        return httpClient;
+    }
+    
+    /**
+     * 关闭资源
+     */
+    public void close() {
+        try {
+            if (zkUtil != null) {
+                zkUtil.close();
+            }
+            // HttpClient不需要手动关闭，它会自动管理连接池
+        } catch (Exception e) {
+            // 忽略关闭时的异常
+        }
     }
 }
