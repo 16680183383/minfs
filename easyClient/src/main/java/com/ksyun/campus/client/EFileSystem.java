@@ -83,12 +83,18 @@ public class EFileSystem extends FileSystem {
      */
     public String getMetaServerAddress() {
         try {
+            // 1) 优先取ZK的leader地址
+            String leader = zkUtil.getLeaderAddress();
+            if (leader != null && !leader.isEmpty()) {
+                return leader;
+            }
+            // 2) 回退：取metaservers子节点列表的第一个
             List<String> addresses = zkUtil.getMetaServerAddresses();
             if (addresses != null && !addresses.isEmpty()) {
                 return addresses.get(0);
             }
         } catch (Exception e) {
-            // 使用默认地址
+            // 忽略，走默认
         }
         return defaultMetaServerAddress;
     }

@@ -73,6 +73,10 @@ public class EasyClientTestRunner {
                         System.out.println("运行测试用例6: 性能测试\n");
                         testCases.testCase6_PerformanceTest();
                         break;
+                    case "7":
+                        System.out.println("运行测试用例7: 高可用演示\n");
+                        testCases.testCase7_HighAvailability();
+                        break;
                         
                     case "all":
                         System.out.println("运行所有测试用例\n");
@@ -108,6 +112,7 @@ public class EasyClientTestRunner {
         System.out.println("  4  - 集群信息获取");
         System.out.println("  5  - 错误处理和边界情况");
         System.out.println("  6  - 性能测试");
+        System.out.println("  7  - 高可用演示");
         System.out.println("  all - 运行所有测试用例");
         System.out.println("\n💡 示例:");
         System.out.println("  java -cp easyClient-1.0.jar com.ksyun.campus.client.test.EasyClientTestRunner 1");

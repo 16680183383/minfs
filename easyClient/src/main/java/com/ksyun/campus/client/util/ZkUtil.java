@@ -18,6 +18,9 @@ public class ZkUtil {
     private String connectString = "localhost:2181";
     private int sessionTimeout = 30000;
     private CountDownLatch connectionLatch = new CountDownLatch(1);
+
+    // 统一ZK根路径，便于读取leader
+    private String zkRootPath = "/minfs";
     
     /**
      * 连接到Zookeeper
@@ -34,27 +37,55 @@ public class ZkUtil {
     }
     
     /**
+     * 获取当前Leader的地址（host:port）
+     * 读取路径: /minfs/leader/leader，内容形如 host:port:timestamp
+     */
+    public String getLeaderAddress() throws Exception {
+        if (zooKeeper == null) {
+            throw new IllegalStateException("Zookeeper未连接");
+        }
+        try {
+            String path = zkRootPath + "/leader/leader";
+            byte[] data = zooKeeper.getData(path, false, (Stat) null);
+            if (data == null || data.length == 0) {
+                return null;
+            }
+            String raw = new String(data);
+            // 可能为 host:port 或 host:port:timestamp
+            String[] parts = raw.split(":");
+            if (parts.length >= 2) {
+                return parts[0] + ":" + parts[1];
+            }
+            return raw;
+        } catch (Exception e) {
+            // 路径不存在或其他异常则返回null，交由调用方回退
+            return null;
+        }
+    }
+    
+    /**
      * 获取MetaServer地址列表
      */
     public List<String> getMetaServerAddresses() throws Exception {
         if (zooKeeper == null) {
             throw new IllegalStateException("Zookeeper未连接");
         }
-        
         List<String> addresses = new ArrayList<>();
         try {
-            List<String> children = zooKeeper.getChildren("/metaservers", false);
+            String path = zkRootPath + "/metaservers";
+            List<String> children = zooKeeper.getChildren(path, false);
             for (String child : children) {
-                byte[] data = zooKeeper.getData("/metaservers/" + child, false, null);
-                if (data != null) {
-                    String address = new String(data);
-                    addresses.add(address);
+                byte[] data = zooKeeper.getData(path + "/" + child, false, null);
+                if (data != null && data.length > 0) {
+                    addresses.add(new String(data));
+                } else {
+                    // 回退：有些实现可能把地址放在节点名
+                    addresses.add(child);
                 }
             }
         } catch (Exception e) {
             // 如果路径不存在，返回空列表
         }
-        
         return addresses;
     }
     
@@ -65,21 +96,21 @@ public class ZkUtil {
         if (zooKeeper == null) {
             throw new IllegalStateException("Zookeeper未连接");
         }
-        
         List<String> addresses = new ArrayList<>();
         try {
-            List<String> children = zooKeeper.getChildren("/dataservers", false);
+            String path = zkRootPath + "/dataservers";
+            List<String> children = zooKeeper.getChildren(path, false);
             for (String child : children) {
-                byte[] data = zooKeeper.getData("/dataservers/" + child, false, null);
-                if (data != null) {
-                    String address = new String(data);
-                    addresses.add(address);
+                byte[] data = zooKeeper.getData(path + "/" + child, false, null);
+                if (data != null && data.length > 0) {
+                    addresses.add(new String(data));
+                } else {
+                    addresses.add(child);
                 }
             }
         } catch (Exception e) {
             // 如果路径不存在，返回空列表
         }
-        
         return addresses;
     }
     

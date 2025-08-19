@@ -563,6 +563,92 @@ public class FileSystemTestCases {
     }
     
     /**
+     * 测试用例7: 高可用演示
+     * 场景：先执行一轮基础操作 -> 提示手动停止部分MetaServer/DataServer进程 -> 再执行一轮基础操作以验证系统仍可用
+     */
+    public void testCase7_HighAvailability() {
+        System.out.println("=== 测试用例7: 高可用演示 ===");
+        try {
+            // 7.0 显示当前集群信息
+            System.out.println("7.0 当前集群信息（操作前）");
+            try {
+                ClusterInfo ci = fileSystem.getClusterInfo();
+                if (ci != null) {
+                    System.out.println("   Leader: " + (ci.getMetaServers() != null ? ci.getMetaServers().get("leaderAddress") : "unknown"));
+                    System.out.println("   Followers: " + (ci.getMetaServers() != null ? ci.getMetaServers().get("followerAddresses") : "[]"));
+                    if (ci.getDataServers() != null) {
+                        System.out.println("   DataServers: " + ci.getDataServers().size());
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("   获取集群信息失败（可忽略继续）: " + e.getMessage());
+            }
+
+            // 7.1 基线操作：创建目录与文件，写入并读取
+            System.out.println("7.1 基线操作: 创建/写入/读取");
+            fileSystem.mkdir("/test_ha");
+            FSOutputStream out1 = fileSystem.create("/test_ha/before_ha.txt");
+            String baseContent = "Before HA failover - 基线写入";
+            out1.write(baseContent.getBytes("UTF-8"));
+            out1.close();
+            FSInputStream in1 = fileSystem.open("/test_ha/before_ha.txt");
+            byte[] buf1 = new byte[256];
+            int n1 = in1.read(buf1);
+            in1.close();
+            System.out.println("   读取到字节数: " + n1);
+
+            // 7.2 提示手动kill部分节点
+            System.out.println("7.2 请在下方倒计时期间手动停止部分节点（示例）：");
+            System.out.println("   - 停止一个或多个 MetaServer（除Leader外，或包括Leader以验证自动切换）");
+            System.out.println("   - 停止一个或多个 DataServer");
+            System.out.println("   Windows 示例（PowerShell 需根据实际PID）：Stop-Process -Id <PID>");
+            System.out.println("   Linux/Mac 示例：kill -9 <PID>");
+            for (int i = 30; i >= 1; i--) {
+                System.out.print("   等待 " + i + " 秒\r");
+                try { Thread.sleep(1000); } catch (InterruptedException ignore) { }
+            }
+            System.out.println();
+
+            // 7.3 再次获取集群信息，观察变化
+            System.out.println("7.3 集群信息（节点停止后）");
+            try {
+                ClusterInfo ci2 = fileSystem.getClusterInfo();
+                if (ci2 != null) {
+                    System.out.println("   Leader: " + (ci2.getMetaServers() != null ? ci2.getMetaServers().get("leaderAddress") : "unknown"));
+                    System.out.println("   Followers: " + (ci2.getMetaServers() != null ? ci2.getMetaServers().get("followerAddresses") : "[]"));
+                    if (ci2.getDataServers() != null) {
+                        System.out.println("   DataServers: " + ci2.getDataServers().size());
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("   获取集群信息失败（可忽略继续）: " + e.getMessage());
+            }
+
+            // 7.4 故障后再次执行基础操作：创建/写入/读取
+            System.out.println("7.4 故障后再次执行基础操作");
+            FSOutputStream out2 = fileSystem.create("/test_ha/after_ha.txt");
+            String afterContent = "After HA failover - 故障后写入";
+            out2.write(afterContent.getBytes("UTF-8"));
+            out2.close();
+            FSInputStream in2 = fileSystem.open("/test_ha/after_ha.txt");
+            byte[] buf2 = new byte[256];
+            int n2 = in2.read(buf2);
+            in2.close();
+            System.out.println("   读取到字节数: " + n2);
+
+            // 7.5 清理
+            System.out.println("7.5 清理HA演示文件与目录");
+            try { fileSystem.delete("/test_ha/before_ha.txt"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_ha/after_ha.txt"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_ha"); } catch (Exception ignore) {}
+        } catch (Exception e) {
+            System.err.println("测试用例7执行失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+        System.out.println("=== 测试用例7完成 ===\n");
+    }
+
+    /**
      * 运行所有测试用例
      */
     public void runAllTestCases() {
@@ -574,6 +660,8 @@ public class FileSystemTestCases {
         //testCase4_ClusterInformation();
         testCase5_ErrorHandling();
         testCase6_PerformanceTest();
+        // 高可用演示
+        testCase7_HighAvailability();
         
         System.out.println("✅ 所有测试用例执行完成！");
     }
