@@ -232,6 +232,7 @@ public class ZkDataServerService {
                     String rack = json.get("rack") != null ? String.valueOf(json.get("rack")) : null;
                     long total = json.get("totalCapacity") instanceof Number ? ((Number) json.get("totalCapacity")).longValue() : 0L;
                     long used = json.get("usedCapacity") instanceof Number ? ((Number) json.get("usedCapacity")).longValue() : 0L;
+                    long fileTotal = json.get("fileTotal") instanceof Number ? ((Number) json.get("fileTotal")).longValue() : 0L;
                     String status = json.get("status") != null ? String.valueOf(json.get("status")) : "unknown";
 
                     log.debug("解析容量信息: totalCapacity={} ({}), usedCapacity={} ({}), 原始值: totalCapacity={}, usedCapacity={}", 
@@ -245,6 +246,7 @@ public class ZkDataServerService {
                     server.put("rack", rack);
                     server.put("totalCapacity", total);
                     server.put("usedCapacity", used);
+                    server.put("fileTotal", fileTotal);
                     // 计算剩余容量
                     long remainingCapacity = Math.max(0, total - used);
                     server.put("remainingCapacity", remainingCapacity);

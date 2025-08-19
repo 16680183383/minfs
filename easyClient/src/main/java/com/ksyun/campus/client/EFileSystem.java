@@ -292,12 +292,92 @@ public class EFileSystem extends FileSystem {
         try {
             String metaServerAddress = getMetaServerAddress();
             String url = "http://" + metaServerAddress + "/cluster/info";
-            
             String response = HttpClientUtil.doGet(httpClient, url);
-            if (response != null && !response.contains("error")) {
-                return objectMapper.readValue(response, ClusterInfo.class);
+            if (response == null || response.contains("error")) {
+                return null;
             }
-            return null;
+            java.util.Map<?, ?> raw = objectMapper.readValue(response, java.util.Map.class);
+            ClusterInfo ci = new ClusterInfo();
+
+            // metaServers: leader + followers
+            Object metaServersObj = raw.get("metaServers");
+            if (metaServersObj instanceof java.util.Map) {
+                java.util.Map<?, ?> ms = (java.util.Map<?, ?>) metaServersObj;
+                Object leaderAddrObj = ms.get("leaderAddress");
+                String leaderAddr = leaderAddrObj == null ? null : String.valueOf(leaderAddrObj);
+                if (leaderAddr != null && leaderAddr.contains(":")) {
+                    String[] hp = leaderAddr.split(":", 2);
+                    com.ksyun.campus.client.domain.MetaServerMsg master = new com.ksyun.campus.client.domain.MetaServerMsg();
+                    master.setHost(hp[0]);
+                    try { master.setPort(Integer.parseInt(hp[1])); } catch (Exception ignore) { master.setPort(0); }
+                    ci.setMasterMetaServer(master);
+                }
+                // followers -> List<MetaServerMsg>
+                java.util.List<com.ksyun.campus.client.domain.MetaServerMsg> slaves = new java.util.ArrayList<>();
+                Object followersObj = ms.get("followerAddresses");
+                if (followersObj instanceof java.util.List) {
+                    for (Object f : (java.util.List<?>) followersObj) {
+                        String addr = String.valueOf(f);
+                        if (addr.contains(":")) {
+                            String[] hp2 = addr.split(":", 2);
+                            com.ksyun.campus.client.domain.MetaServerMsg slave = new com.ksyun.campus.client.domain.MetaServerMsg();
+                            slave.setHost(hp2[0]);
+                            try { slave.setPort(Integer.parseInt(hp2[1])); } catch (Exception ignore) { slave.setPort(0); }
+                            slaves.add(slave);
+                        }
+                    }
+                }
+                ci.setSlaveMetaServer(slaves);
+            }
+
+            // dataServers
+            Object dsObj = raw.get("dataServers");
+            java.util.List<com.ksyun.campus.client.domain.DataServerMsg> dsList = new java.util.ArrayList<>();
+            if (dsObj instanceof java.util.List) {
+                for (Object o : (java.util.List<?>) dsObj) {
+                    if (!(o instanceof java.util.Map)) continue;
+                    java.util.Map<?, ?> m = (java.util.Map<?, ?>) o;
+                    String host = null; int port = 0;
+                    Object addressObj = m.get("address");
+                    if (addressObj != null) {
+                        String addr = String.valueOf(addressObj);
+                        if (addr.contains(":")) {
+                            String[] hp = addr.split(":", 2);
+                            host = hp[0];
+                            try { port = Integer.parseInt(hp[1]); } catch (Exception ignore) { port = 0; }
+                        }
+                    }
+                    Object totalObj = m.get("totalCapacity");
+                    Object usedObj = m.get("usedCapacity");
+                    long cap = totalObj instanceof Number ? ((Number) totalObj).longValue() : 0L;
+                    long use = usedObj instanceof Number ? ((Number) usedObj).longValue() : 0L;
+                    // 兼容 fileTotal 字段
+                    Object fileTotalObj = m.get("fileTotal");
+                    if (!(fileTotalObj instanceof Number)) {
+                        fileTotalObj = m.get("files");
+                    }
+                    long fileTotal = fileTotalObj instanceof Number ? ((Number) fileTotalObj).longValue() : 0L;
+                    com.ksyun.campus.client.domain.DataServerMsg dm = new com.ksyun.campus.client.domain.DataServerMsg();
+                    dm.setHost(host);
+                    dm.setPort(port);
+                    dm.setCapacity(cap);
+                    dm.setUseCapacity(use);
+                    dm.setFileTotal(fileTotal);
+                    dsList.add(dm);
+                }
+            }
+            ci.setDataServer(dsList);
+
+            // 直接传递 replicaDistribution 与 healthStatus
+            Object rep = raw.get("replicaDistribution");
+            if (rep instanceof java.util.Map) {
+                ci.setReplicaDistribution((java.util.Map<String, Object>) rep);
+            }
+            Object health = raw.get("healthStatus");
+            if (health instanceof java.util.Map) {
+                ci.setHealthStatus((java.util.Map<String, Object>) health);
+            }
+            return ci;
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IOException("解析集群信息失败", e);
         } catch (Exception e) {

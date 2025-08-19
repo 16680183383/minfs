@@ -276,101 +276,52 @@ public class FileSystemTestCases {
             ClusterInfo clusterInfo = fileSystem.getClusterInfo();
             if (clusterInfo != null) {
                 System.out.println("   集群信息获取成功");
-                
-                // 检查是否有错误
-                if (clusterInfo.getError() != null) {
-                    System.err.println("   集群信息获取错误: " + clusterInfo.getError());
-                    return;
-                }
-                
-                // 4.1 MetaServer集群信息:
-                System.out.println("4.1 MetaServer集群信息:");
-                if (clusterInfo.getMetaServers() != null) {
-                    Map<String, Object> metaServers = clusterInfo.getMetaServers();
-                    System.out.println("   Leader地址: " + metaServers.get("leaderAddress"));
-                    System.out.println("   Follower地址列表: " + metaServers.get("followerAddresses"));
-                }
-                
-                // 4.2 显示MetaServer集群信息
-                System.out.println("4.2 MetaServer集群信息");
-                if (clusterInfo.getMetaServers() != null) {
-                    Map<String, Object> metaServers = clusterInfo.getMetaServers();
-                    System.out.println("   Leader地址: " + metaServers.get("leaderAddress"));
-                    System.out.println("   Follower地址列表: " + metaServers.get("followerAddresses"));
-                } else {
-                    System.out.println("   MetaServer信息为空");
-                }
-                
-                // 4.3 显示DataServer集群信息
-                System.out.println("4.3 DataServer集群信息");
-                if (clusterInfo.getDataServers() != null) {
-                    System.out.println("   总DataServer数量: " + clusterInfo.getTotalDataServers());
-                    System.out.println("   活跃DataServer数量: " + clusterInfo.getActiveDataServers());
-                    
-                    List<Map<String, Object>> dataServers = clusterInfo.getDataServers();
-                    System.out.println("   DataServer详细信息:");
-                    for (int i = 0; i < Math.min(5, dataServers.size()); i++) {
-                        Map<String, Object> ds = dataServers.get(i);
-                        System.out.println("     DataServer " + (i+1) + ": " + ds.get("address") + 
-                                         " (容量: " + ds.get("totalCapacity") +
-                                         ", 已用: " + ds.get("usedCapacity") +
-                                         ", 活跃: " + ds.get("active") + ")");
+                System.out.println("4.2 MetaServer信息");
+                System.out.println("   Master: " + clusterInfo.getMasterMetaServer());
+                System.out.println("   Slaves: " + clusterInfo.getSlaveMetaServer());
+                System.out.println("4.3 DataServer信息");
+                if (clusterInfo.getDataServer() != null) {
+                    System.out.println("   DataServer数量: " + clusterInfo.getDataServer().size());
+                    for (int i = 0; i < Math.min(5, clusterInfo.getDataServer().size()); i++) {
+                        com.ksyun.campus.client.domain.DataServerMsg ds = clusterInfo.getDataServer().get(i);
+                        System.out.println("     DS" + (i+1) + ": " + ds.getHost() + ":" + ds.getPort() + " (容量: " + ds.getCapacity() + ", 已用: " + ds.getUseCapacity() + ", 文件数: " + ds.getFileTotal() + ")");
                     }
-                    if (dataServers.size() > 5) {
-                        System.out.println("     ... 还有 " + (dataServers.size() - 5) + " 个DataServer");
+                    if (clusterInfo.getDataServer().size() > 5) {
+                        System.out.println("     ... 还有 " + (clusterInfo.getDataServer().size() - 5) + " 个DataServer");
                     }
                 } else {
                     System.out.println("   DataServer信息为空");
                 }
-                
-                // 4.4 显示主副本分布统计
-                System.out.println("4.4 主副本分布统计");
-                if (clusterInfo.getReplicaDistribution() != null) {
-                    Map<String, Object> replicaDist = clusterInfo.getReplicaDistribution();
-                    System.out.println("   总文件数: " + replicaDist.get("totalFiles"));
-                    System.out.println("   总目录数: " + replicaDist.get("totalDirectories"));
-                    
-                    // 显示主副本分布
-                    if (replicaDist.get("primaryReplicaCount") instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Integer> primaryCount = (Map<String, Integer>) replicaDist.get("primaryReplicaCount");
-                        System.out.println("   各节点主副本分布:");
-                        for (Map.Entry<String, Integer> entry : primaryCount.entrySet()) {
-                            System.out.println("     " + entry.getKey() + ": " + entry.getValue() + " 个主副本");
-                        }
-                    }
-                    
-                    // 显示总副本分布
-                    if (replicaDist.get("totalReplicaCount") instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Integer> totalCount = (Map<String, Integer>) replicaDist.get("totalReplicaCount");
-                        System.out.println("   各节点总副本分布:");
-                        for (Map.Entry<String, Integer> entry : totalCount.entrySet()) {
-                            System.out.println("     " + entry.getKey() + ": " + entry.getValue() + " 个副本");
-                        }
-                    }
-                } else {
-                    System.out.println("   副本分布信息为空");
-                }
-                
-                // 4.5 显示集群健康状态
+				System.out.println("4.4 主副本分布统计");
+				if (clusterInfo.getReplicaDistribution() != null) {
+					Map<String, Object> replicaDist = clusterInfo.getReplicaDistribution();
+					System.out.println("   总文件数: " + replicaDist.get("totalFiles"));
+					System.out.println("   总目录数: " + replicaDist.get("totalDirectories"));
+					// 显示主副本分布
+					if (replicaDist.get("primaryReplicaCount") instanceof Map) {
+						@SuppressWarnings("unchecked")
+						Map<String, Integer> primaryCount = (Map<String, Integer>) replicaDist.get("primaryReplicaCount");
+						System.out.println("   各节点主副本分布:");
+						for (Map.Entry<String, Integer> entry : primaryCount.entrySet()) {
+							System.out.println("     " + entry.getKey() + ": " + entry.getValue() + " 个主副本");
+						}
+					}
+					// 显示总副本分布
+					if (replicaDist.get("totalReplicaCount") instanceof Map) {
+						@SuppressWarnings("unchecked")
+						Map<String, Integer> totalCount = (Map<String, Integer>) replicaDist.get("totalReplicaCount");
+						System.out.println("   各节点总副本分布:");
+						for (Map.Entry<String, Integer> entry : totalCount.entrySet()) {
+							System.out.println("     " + entry.getKey() + ": " + entry.getValue() + " 个副本");
+						}
+					}
+				} else {
+					System.out.println("   副本分布信息为空");
+				}
                 System.out.println("4.5 集群健康状态");
                 if (clusterInfo.getHealthStatus() != null) {
-                    Map<String, Object> health = clusterInfo.getHealthStatus();
-                    System.out.println("   MetaServer健康: " + health.get("metaServerHealthy"));
-                    System.out.println("   DataServer健康: " + health.get("dataServerHealthy"));
-                    System.out.println("   整体健康状态: " + health.get("overallHealth"));
-                } else {
-                    System.out.println("   健康状态信息为空");
+                    System.out.println("   健康状态: " + clusterInfo.getHealthStatus());
                 }
-                
-                // 兼容旧版本格式
-                if (clusterInfo.getMasterMetaServer() != null) {
-                    System.out.println("4.6 旧版本兼容信息");
-                    System.out.println("   主MetaServer: " + clusterInfo.getMasterMetaServer());
-                    System.out.println("   从MetaServer: " + clusterInfo.getSlaveMetaServer());
-                }
-                
             } else {
                 System.out.println("   集群信息获取失败");
             }
@@ -574,10 +525,11 @@ public class FileSystemTestCases {
             try {
                 ClusterInfo ci = fileSystem.getClusterInfo();
                 if (ci != null) {
-                    System.out.println("   Leader: " + (ci.getMetaServers() != null ? ci.getMetaServers().get("leaderAddress") : "unknown"));
-                    System.out.println("   Followers: " + (ci.getMetaServers() != null ? ci.getMetaServers().get("followerAddresses") : "[]"));
-                    if (ci.getDataServers() != null) {
-                        System.out.println("   DataServers: " + ci.getDataServers().size());
+                    String leader = ci.getMasterMetaServer() != null ? (ci.getMasterMetaServer().getHost() + ":" + ci.getMasterMetaServer().getPort()) : "unknown";
+                    System.out.println("   Leader: " + leader);
+                    System.out.println("   Followers: N/A");
+                    if (ci.getDataServer() != null) {
+                        System.out.println("   DataServers: " + ci.getDataServer().size());
                     }
                 }
             } catch (Exception e) {
@@ -614,10 +566,11 @@ public class FileSystemTestCases {
             try {
                 ClusterInfo ci2 = fileSystem.getClusterInfo();
                 if (ci2 != null) {
-                    System.out.println("   Leader: " + (ci2.getMetaServers() != null ? ci2.getMetaServers().get("leaderAddress") : "unknown"));
-                    System.out.println("   Followers: " + (ci2.getMetaServers() != null ? ci2.getMetaServers().get("followerAddresses") : "[]"));
-                    if (ci2.getDataServers() != null) {
-                        System.out.println("   DataServers: " + ci2.getDataServers().size());
+                    String leader2 = ci2.getMasterMetaServer() != null ? (ci2.getMasterMetaServer().getHost() + ":" + ci2.getMasterMetaServer().getPort()) : "unknown";
+                    System.out.println("   Leader: " + leader2);
+                    System.out.println("   Followers: N/A");
+                    if (ci2.getDataServer() != null) {
+                        System.out.println("   DataServers: " + ci2.getDataServer().size());
                     }
                 }
             } catch (Exception e) {
@@ -722,12 +675,10 @@ public class FileSystemTestCases {
 
             System.out.println("8.7 验证：非分配DataServer上不存在该文件（历史脏副本应被清理）");
             ClusterInfo ci = fileSystem.getClusterInfo();
-            java.util.List<java.util.Map<String, Object>> dsList = (ci != null && ci.getDataServers() != null) ? ci.getDataServers() : java.util.Collections.emptyList();
+            java.util.List<com.ksyun.campus.client.domain.DataServerMsg> dsList = (ci != null && ci.getDataServer() != null) ? ci.getDataServer() : java.util.Collections.emptyList();
             int staleFound = 0;
-            for (java.util.Map<String, Object> ds : dsList) {
-                Object addr = ds.get("address");
-                if (addr == null) continue;
-                String a = String.valueOf(addr);
+            for (com.ksyun.campus.client.domain.DataServerMsg ds : dsList) {
+                String a = (ds.getHost() != null ? ds.getHost() : "localhost") + ":" + ds.getPort();
                 if (healedReplicas.contains(a)) continue; // 分配内副本，跳过
                 try {
                     String url = "http://" + a + "/checkFileExists?path=" + path;

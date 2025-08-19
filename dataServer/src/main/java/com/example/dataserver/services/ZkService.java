@@ -33,6 +33,7 @@ public class ZkService {
     private String dataServerNodePath;
     private final AtomicLong usedCapacity = new AtomicLong(0);
     private final AtomicLong totalCapacity = new AtomicLong(1024 * 1024 * 1024L); // 1GB 默认容量
+    private final AtomicLong fileTotal = new AtomicLong(0);
     
     @PostConstruct
     public void init() {
@@ -129,11 +130,17 @@ public class ZkService {
             long currentUsedCapacity = calculateCurrentUsedCapacity();
             usedCapacity.set(currentUsedCapacity);
             log.info("计算当前已用容量: {} 字节", currentUsedCapacity);
+
+            // 初始计算fileTotal（以_md5_list.txt文件数作为逻辑文件数）
+            long currentFileTotal = calculateCurrentFileTotal();
+            fileTotal.set(currentFileTotal);
+            log.info("计算当前文件总数(fileTotal): {}", currentFileTotal);
             
         } catch (Exception e) {
             log.warn("计算存储容量失败，使用默认值", e);
             totalCapacity.set(1024 * 1024 * 1024L); // 1GB
             usedCapacity.set(0L);
+            fileTotal.set(0L);
         }
     }
     
@@ -178,10 +185,40 @@ public class ZkService {
         return size;
     }
     
+    /**
+     * 统计当前存储下逻辑文件总数（以 *_md5_list.txt 计数）
+     */
+    private long calculateCurrentFileTotal() {
+        try {
+            java.io.File storageDir = new java.io.File(storagePath);
+            if (!storageDir.exists() || !storageDir.isDirectory()) {
+                return 0L;
+            }
+            return countMd5ListFiles(storageDir);
+        } catch (Exception e) {
+            log.warn("统计文件总数失败", e);
+            return 0L;
+        }
+    }
+
+    private long countMd5ListFiles(java.io.File dir) {
+        long count = 0L;
+        java.io.File[] files = dir.listFiles();
+        if (files == null) return 0L;
+        for (java.io.File f : files) {
+            if (f.isDirectory()) {
+                count += countMd5ListFiles(f);
+            } else if (f.isFile() && f.getName().endsWith("_md5_list.txt")) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
     private String createServerInfo() {
         return String.format(
-            "{\"ip\":\"%s\",\"port\":%d,\"totalCapacity\":%d,\"usedCapacity\":%d,\"status\":\"alive\"}",
-            serverIp, serverPort, totalCapacity.get(), usedCapacity.get()
+            "{\"ip\":\"%s\",\"port\":%d,\"totalCapacity\":%d,\"usedCapacity\":%d,\"fileTotal\":%d,\"status\":\"alive\"}",
+            serverIp, serverPort, totalCapacity.get(), usedCapacity.get(), fileTotal.get()
         );
     }
     
@@ -210,6 +247,8 @@ public class ZkService {
                 // 重新计算当前已用容量
                 long currentUsedCapacity = calculateCurrentUsedCapacity();
                 usedCapacity.set(currentUsedCapacity);
+                // 重新统计文件总数
+                fileTotal.set(calculateCurrentFileTotal());
                 
                 String serverInfo = createServerInfo();
                 zooKeeper.setData(dataServerNodePath, serverInfo.getBytes(), -1);
@@ -275,6 +314,38 @@ public class ZkService {
     public long getTotalCapacity() {
         return totalCapacity.get();
     }
+
+    /** 增加文件计数 */
+    public void addFileCount(long delta) {
+        long newVal = fileTotal.addAndGet(delta);
+        log.info("增加文件计数: +{}, 总计: {}", delta, newVal);
+        // 立即同步到ZK
+        try {
+            if (zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED) {
+                String serverInfo = createServerInfo();
+                zooKeeper.setData(dataServerNodePath, serverInfo.getBytes(), -1);
+            }
+        } catch (Exception e) {
+            log.warn("ZK节点文件计数更新失败", e);
+        }
+    }
+
+    /** 减少文件计数 */
+    public void subtractFileCount(long delta) {
+        long newVal = fileTotal.addAndGet(-delta);
+        if (newVal < 0) { newVal = 0; fileTotal.set(0); }
+        log.info("减少文件计数: -{}, 总计: {}", delta, newVal);
+        try {
+            if (zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED) {
+                String serverInfo = createServerInfo();
+                zooKeeper.setData(dataServerNodePath, serverInfo.getBytes(), -1);
+            }
+        } catch (Exception e) {
+            log.warn("ZK节点文件计数更新失败", e);
+        }
+    }
+
+    public long getFileTotal() { return fileTotal.get(); }
     
     @PreDestroy
     public void destroy() {

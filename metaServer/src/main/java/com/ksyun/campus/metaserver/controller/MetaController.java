@@ -45,9 +45,6 @@ public class MetaController {
     @Autowired
     private org.springframework.web.client.RestTemplate restTemplate;
 
-    @Autowired
-    private ZkDataServerService zkDataServerService;
-
     private java.net.URI buildLeaderUri(String leader, String path, String query) {
         try {
             return new java.net.URI("http://" + leader + path + (query == null ? "" : ("?" + query)));

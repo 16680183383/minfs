@@ -6,50 +6,34 @@ import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ClusterInfo {
-    private Map<String, Object> metaServers;
-    private List<Map<String, Object>> dataServers;
-    private Integer totalDataServers;
-    private Integer activeDataServers;
+    private MetaServerMsg masterMetaServer;
+    private List<MetaServerMsg> slaveMetaServer;
+    private List<DataServerMsg> dataServer;
     private Map<String, Object> replicaDistribution;
     private Map<String, Object> healthStatus;
-    private String error;
 
-    // 兼容旧版本的字段
-    private MetaServerMsg masterMetaServer;
-    private MetaServerMsg slaveMetaServer;
-    private List<DataServerMsg> dataServer;
-
-    // 新的字段
-    public Map<String, Object> getMetaServers() {
-        return metaServers;
+    public MetaServerMsg getMasterMetaServer() {
+        return masterMetaServer;
     }
 
-    public void setMetaServers(Map<String, Object> metaServers) {
-        this.metaServers = metaServers;
+    public void setMasterMetaServer(MetaServerMsg masterMetaServer) {
+        this.masterMetaServer = masterMetaServer;
     }
 
-    public List<Map<String, Object>> getDataServers() {
-        return dataServers;
+    public List<MetaServerMsg> getSlaveMetaServer() {
+        return slaveMetaServer;
     }
 
-    public void setDataServers(List<Map<String, Object>> dataServers) {
-        this.dataServers = dataServers;
+    public void setSlaveMetaServer(List<MetaServerMsg> slaveMetaServer) {
+        this.slaveMetaServer = slaveMetaServer;
     }
 
-    public Integer getTotalDataServers() {
-        return totalDataServers;
+    public List<DataServerMsg> getDataServer() {
+        return dataServer;
     }
 
-    public void setTotalDataServers(Integer totalDataServers) {
-        this.totalDataServers = totalDataServers;
-    }
-
-    public Integer getActiveDataServers() {
-        return activeDataServers;
-    }
-
-    public void setActiveDataServers(Integer activeDataServers) {
-        this.activeDataServers = activeDataServers;
+    public void setDataServer(List<DataServerMsg> dataServer) {
+        this.dataServer = dataServer;
     }
 
     public Map<String, Object> getReplicaDistribution() {
@@ -68,49 +52,14 @@ public class ClusterInfo {
         this.healthStatus = healthStatus;
     }
 
-    public String getError() {
-        return error;
-    }
-
-    public void setError(String error) {
-        this.error = error;
-    }
-
-    // 兼容旧版本的字段
-    public MetaServerMsg getMasterMetaServer() {
-        return masterMetaServer;
-    }
-
-    public void setMasterMetaServer(MetaServerMsg masterMetaServer) {
-        this.masterMetaServer = masterMetaServer;
-    }
-
-    public MetaServerMsg getSlaveMetaServer() {
-        return slaveMetaServer;
-    }
-
-    public void setSlaveMetaServer(MetaServerMsg slaveMetaServer) {
-        this.slaveMetaServer = slaveMetaServer;
-    }
-
-    public List<DataServerMsg> getDataServer() {
-        return dataServer;
-    }
-
-    public void setDataServer(List<DataServerMsg> dataServer) {
-        this.dataServer = dataServer;
-    }
-
     @Override
     public String toString() {
         return "ClusterInfo{" +
-                "metaServers=" + metaServers +
-                ", dataServers=" + dataServers +
-                ", totalDataServers=" + totalDataServers +
-                ", activeDataServers=" + activeDataServers +
+                "masterMetaServer=" + masterMetaServer +
+                ", slaveMetaServer=" + slaveMetaServer +
+                ", dataServer=" + dataServer +
                 ", replicaDistribution=" + replicaDistribution +
                 ", healthStatus=" + healthStatus +
-                ", error=" + error +
                 '}';
     }
 }

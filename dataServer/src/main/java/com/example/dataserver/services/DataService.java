@@ -212,6 +212,9 @@ public class DataService {
             zkService.addUsedCapacity(totalDataSize);
             System.out.println("[INFO] 容量更新: +" + totalDataSize + " 字节");
 
+            // 文件计数+1（按逻辑文件计数）
+            zkService.addFileCount(1);
+            
             // 不再由 DataServer 自行进行三副本同步；由 MetaServer 负责调度多副本写入
             // 这里无论是否副本同步请求，均只写入本地
             if (isReplicaSync) {
@@ -305,6 +308,8 @@ public class DataService {
                 // 更新ZK中的已使用容量
                 zkService.subtractUsedCapacity(totalDeletedSize);
                 System.out.println("[INFO] 容量更新: -" + totalDeletedSize + " 字节");
+                // 文件计数-1
+                zkService.subtractFileCount(1);
                 
                 System.out.println("[INFO] 本地文件删除成功：" + path);
                 return true;

@@ -321,7 +321,7 @@ public class MetaService {
      * 获取文件信息
      */
     public StatInfo getFile(String path) {
-        // 先从内存缓存获取，如果没有则从RocksDB获取
+        // 从RocksDB获取
         return metadataStorage.getMetadata(path);
     }
     

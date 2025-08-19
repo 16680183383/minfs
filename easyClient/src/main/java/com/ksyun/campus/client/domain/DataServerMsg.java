@@ -6,9 +6,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 public class DataServerMsg{
     private String host;
     private int port;
-    private int fileTotal;
-    private int capacity;
-    private int useCapacity;
+    private long fileTotal;
+    private long capacity;
+    private long useCapacity;
 
     public String getHost() {
         return host;
@@ -26,27 +26,27 @@ public class DataServerMsg{
         this.port = port;
     }
 
-    public int getFileTotal() {
+    public long getFileTotal() {
         return fileTotal;
     }
 
-    public void setFileTotal(int fileTotal) {
+    public void setFileTotal(long fileTotal) {
         this.fileTotal = fileTotal;
     }
 
-    public int getCapacity() {
+    public long getCapacity() {
         return capacity;
     }
 
-    public void setCapacity(int capacity) {
+    public void setCapacity(long capacity) {
         this.capacity = capacity;
     }
 
-    public int getUseCapacity() {
+    public long getUseCapacity() {
         return useCapacity;
     }
 
-    public void setUseCapacity(int useCapacity) {
+    public void setUseCapacity(long useCapacity) {
         this.useCapacity = useCapacity;
     }
 
