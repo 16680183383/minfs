@@ -36,8 +36,40 @@ public class DataController {
             @RequestHeader(value = "X-Is-Replica-Sync", required = false) String xIsReplicaSync,
             HttpServletRequest request) {
         try {
+            // 参数验证
+            if (path == null || path.trim().isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "文件路径不能为空");
+                return ResponseEntity.badRequest().body(error);
+            }
+            if (!path.startsWith("/")) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "文件路径必须以/开头: " + path);
+                return ResponseEntity.badRequest().body(error);
+            }
+            if (offset < 0) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "偏移量不能为负数: " + offset);
+                return ResponseEntity.badRequest().body(error);
+            }
+            if (length < 0) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "长度不能为负数: " + length);
+                return ResponseEntity.badRequest().body(error);
+            }
+            
             // 读取请求体中的二进制数据
             byte[] data = request.getInputStream().readAllBytes();
+            if (data == null || data.length == 0) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "请求体数据为空");
+                return ResponseEntity.badRequest().body(error);
+            }
 
             // 核心修改：判断是否为副本同步请求（头存在且为"true"）
             boolean isReplicaSync = "true".equalsIgnoreCase(xIsReplicaSync);
@@ -50,6 +82,11 @@ public class DataController {
             result.put("replicaLocations", replicaLocations);
             result.put("message", "Write success");
             return new ResponseEntity<>(result, HttpStatus.OK);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "参数错误: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
             String errorMsg = "写入失败：" + e.getMessage();
             if (e.getMessage().contains("Not enough available dataServer")) {
@@ -77,8 +114,22 @@ public class DataController {
             @RequestParam int offset,
             @RequestParam int length) {
         try {
-            // 调用服务层读取数据
-            byte[] data = dataService.readWithChunk(path);
+            // 参数验证
+            if (path == null || path.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("文件路径不能为空".getBytes());
+            }
+            if (!path.startsWith("/")) {
+                return ResponseEntity.badRequest().body("文件路径必须以/开头".getBytes());
+            }
+            if (offset < 0) {
+                return ResponseEntity.badRequest().body("偏移量不能为负数".getBytes());
+            }
+            if (length < -1) {
+                return ResponseEntity.badRequest().body("长度不能小于-1".getBytes());
+            }
+            
+            // 调用服务层读取数据（支持分块读取）
+            byte[] data = dataService.readWithChunk(path, offset, length);
 
             // 若数据为空，返回404
             if (data == null) {
@@ -87,16 +138,23 @@ public class DataController {
 
             // 返回二进制数据
             return new ResponseEntity<>(data, HttpStatus.OK);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(("参数错误: " + e.getMessage()).getBytes());
         } catch (Exception e) {
             return new ResponseEntity<>(e.getMessage().getBytes(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+    
     /**
      * 关闭退出进程
      */
     @RequestMapping("shutdown")
     public void shutdownServer(){
-        System.exit(-1);
+        try {
+            System.exit(-1);
+        } catch (Exception e) {
+            // 忽略关闭时的异常
+        }
     }
 
     // 每个dataServer需实现/checkFileExists接口（Controller层）
@@ -104,6 +162,14 @@ public class DataController {
     public ResponseEntity<Boolean> checkFileExists(
             @RequestParam String path) {
         try {
+            // 参数验证
+            if (path == null || path.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(false);
+            }
+            if (!path.startsWith("/")) {
+                return ResponseEntity.badRequest().body(false);
+            }
+            
             String localChunkPath = dataService.getLocalFilePath(path + "/chunk_0"); // 检查第一个块（简化）
             boolean exists = new File(localChunkPath).exists();
             return ResponseEntity.ok(exists);
@@ -125,6 +191,20 @@ public class DataController {
             @RequestHeader(required = false) String xIsReplicaSync,
             HttpServletRequest request) {
         try {
+            // 参数验证
+            if (path == null || path.trim().isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "MD5清单路径不能为空");
+                return ResponseEntity.badRequest().body(error);
+            }
+            if (!path.startsWith("/")) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "MD5清单路径必须以/开头: " + path);
+                return ResponseEntity.badRequest().body(error);
+            }
+            
             // 1. 读取请求体中的MD5清单数据（主节点同步过来的二进制数据）
             byte[] md5ListData = request.getInputStream().readAllBytes();
 
@@ -139,6 +219,11 @@ public class DataController {
             result.put("md5ListPath", path);
             return new ResponseEntity<>(result, HttpStatus.OK);
 
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "参数错误: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (IOException e) {
             Map<String, Object> error = new HashMap<>();
             error.put("success", false);
@@ -157,6 +242,20 @@ public class DataController {
             @RequestParam String path,
             @RequestHeader(value = "X-Is-Replica-Sync", required = false) String xIsReplicaSync) {
         try {
+            // 参数验证
+            if (path == null || path.trim().isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "删除路径不能为空");
+                return ResponseEntity.badRequest().body(error);
+            }
+            if (!path.startsWith("/")) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "删除路径必须以/开头: " + path);
+                return ResponseEntity.badRequest().body(error);
+            }
+            
             // 判断是否为副本同步请求
             boolean isReplicaSync = "true".equalsIgnoreCase(xIsReplicaSync);
 
@@ -167,6 +266,11 @@ public class DataController {
             result.put("success", deleted);
             result.put("message", deleted ? "Delete success" : "Delete failed");
             return new ResponseEntity<>(result, HttpStatus.OK);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "参数错误: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("success", false);

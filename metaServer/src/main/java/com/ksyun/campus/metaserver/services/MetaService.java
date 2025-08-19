@@ -122,6 +122,85 @@ public class MetaService {
     }
     
     /**
+     * 读取文件数据
+     * 支持分块读取，从DataServer获取文件内容
+     */
+    public byte[] readFile(String path, int offset, int length) {
+        try {
+            // 1. 获取文件元数据
+            StatInfo statInfo = getFile(path);
+            if (statInfo == null) {
+                log.warn("文件不存在: {}", path);
+                return null;
+            }
+            
+            if (statInfo.getType() == FileType.Directory) {
+                log.warn("尝试读取目录: {}", path);
+                return null;
+            }
+            
+            // 2. 检查副本信息
+            if (statInfo.getReplicaData() == null || statInfo.getReplicaData().isEmpty()) {
+                log.warn("文件没有可用的副本: {}", path);
+                return null;
+            }
+            
+            // 3. 从第一个可用副本读取数据
+            ReplicaData primaryReplica = statInfo.getReplicaData().get(0);
+            String replicaAddress = primaryReplica.dsNode;
+            
+            log.info("从副本读取文件: {} -> {}", path, replicaAddress);
+            
+            // 4. 调用DataServer读取数据
+            byte[] data = dataServerClient.readFromDataServer(replicaAddress, path);
+            if (data == null) {
+                log.warn("从DataServer读取失败，尝试其他副本: {}", replicaAddress);
+                
+                // 尝试其他副本
+                for (int i = 1; i < statInfo.getReplicaData().size(); i++) {
+                    ReplicaData replica = statInfo.getReplicaData().get(i);
+                    data = dataServerClient.readFromDataServer(replica.dsNode, path);
+                    if (data != null) {
+                        log.info("从备用副本读取成功: {}", replica.dsNode);
+                        break;
+                    }
+                }
+            }
+            
+            if (data == null) {
+                log.error("所有副本都无法读取文件: {}", path);
+                return null;
+            }
+            
+            // 5. 处理分块读取
+            if (offset > 0 || length > 0) {
+                int actualLength = length > 0 ? length : data.length - offset;
+                if (offset >= data.length) {
+                    log.warn("偏移量超出文件大小: offset={}, fileSize={}", offset, data.length);
+                    return new byte[0];
+                }
+                
+                int endPos = Math.min(offset + actualLength, data.length);
+                int resultLength = endPos - offset;
+                
+                byte[] result = new byte[resultLength];
+                System.arraycopy(data, offset, result, 0, resultLength);
+                
+                log.info("分块读取成功: path={}, offset={}, length={}, actualLength={}", 
+                        path, offset, actualLength, resultLength);
+                return result;
+            }
+            
+            log.info("读取文件成功: path={}, size={}", path, data.length);
+            return data;
+            
+        } catch (Exception e) {
+            log.error("读取文件失败: path={}", path, e);
+            return null;
+        }
+    }
+
+    /**
      * 写入文件数据到DataServer并记录副本位置
      */
     public StatInfo writeFile(String path, byte[] data, int offset, int length) {

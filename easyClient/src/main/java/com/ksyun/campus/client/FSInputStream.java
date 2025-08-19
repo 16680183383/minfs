@@ -42,91 +42,150 @@ public class FSInputStream extends InputStream {
         }
         
         try {
-            // 从DataServer读取文件数据
-            if (statInfo.getReplicaData() != null && !statInfo.getReplicaData().isEmpty()) {
-                // 使用第一个副本
-                ReplicaData replica = statInfo.getReplicaData().get(0);
-                String replicaAddress = replica.dsNode; // 格式为 ip:port
-                String url = "http://" + replicaAddress + "/read?path=" + statInfo.getPath();
-                
-                String response = HttpClientUtil.doGet(httpClient, url);
-                if (response != null && !response.contains("error")) {
-                    fileData = response.getBytes("UTF-8");
-                } else {
-                    throw new IOException("从DataServer读取文件失败: " + statInfo.getPath());
-                }
-            } else {
-                throw new IOException("文件没有可用的副本: " + statInfo.getPath());
+            // 参数验证
+            if (statInfo == null) {
+                throw new IOException("文件状态信息为空");
+            }
+            if (statInfo.getPath() == null || statInfo.getPath().trim().isEmpty()) {
+                throw new IOException("文件路径为空");
+            }
+            
+            // 从MetaServer读取文件数据（支持分块读取）
+            String metaServerAddress = fileSystem.getMetaServerAddress();
+            if (metaServerAddress == null || metaServerAddress.trim().isEmpty()) {
+                throw new IOException("无法获取MetaServer地址");
+            }
+            
+            String url = "http://" + metaServerAddress + "/read?path=" + 
+                        java.net.URLEncoder.encode(statInfo.getPath(), "UTF-8") +
+                        "&offset=0&length=-1"; // 读取整个文件
+            
+            String response = HttpClientUtil.doGet(httpClient, url);
+            if (response == null) {
+                throw new IOException("从MetaServer读取文件失败: 响应为空");
+            }
+            if (response.contains("error")) {
+                throw new IOException("从MetaServer读取文件失败: " + response);
+            }
+            
+            fileData = response.getBytes("UTF-8");
+            if (fileData == null || fileData.length == 0) {
+                throw new IOException("文件数据为空");
             }
             
             dataLoaded = true;
+        } catch (IOException e) {
+            throw e;
         } catch (Exception e) {
-            throw new IOException("加载文件数据失败: " + statInfo.getPath(), e);
+            throw new IOException("加载文件数据失败: " + (statInfo != null ? statInfo.getPath() : "未知路径"), e);
         }
     }
     
     @Override
     public int read() throws IOException {
-        if (fileData == null) {
-            loadFileData();
+        try {
+            if (fileData == null) {
+                loadFileData();
+            }
+            
+            if (position >= fileData.length) {
+                return -1;
+            }
+            
+            return fileData[position++] & 0xFF;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("读取文件数据失败", e);
         }
-        
-        if (position >= fileData.length) {
-            return -1;
-        }
-        
-        return fileData[position++] & 0xFF;
     }
     
     @Override
     public int read(byte[] b) throws IOException {
+        if (b == null) {
+            throw new NullPointerException("缓冲区不能为空");
+        }
         return read(b, 0, b.length);
     }
     
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        if (fileData == null) {
-            loadFileData();
+        try {
+            // 参数验证
+            if (b == null) {
+                throw new NullPointerException("缓冲区不能为空");
+            }
+            if (off < 0 || len < 0 || off + len > b.length) {
+                throw new IndexOutOfBoundsException("缓冲区参数无效: off=" + off + ", len=" + len + ", buffer.length=" + b.length);
+            }
+            
+            if (fileData == null) {
+                loadFileData();
+            }
+            
+            if (position >= fileData.length) {
+                return -1;
+            }
+            
+            int bytesToRead = Math.min(len, fileData.length - position);
+            System.arraycopy(fileData, position, b, off, bytesToRead);
+            position += bytesToRead;
+            
+            return bytesToRead;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("读取文件数据失败", e);
         }
-        
-        if (position >= fileData.length) {
-            return -1;
-        }
-        
-        int bytesToRead = Math.min(len, fileData.length - position);
-        System.arraycopy(fileData, position, b, off, bytesToRead);
-        position += bytesToRead;
-        
-        return bytesToRead;
     }
     
     @Override
     public long skip(long n) throws IOException {
-        if (fileData == null) {
-            loadFileData();
+        try {
+            if (n < 0) {
+                return 0;
+            }
+            
+            if (fileData == null) {
+                loadFileData();
+            }
+            
+            long bytesToSkip = Math.min(n, fileData.length - position);
+            position += bytesToSkip;
+            
+            return bytesToSkip;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("跳过文件数据失败", e);
         }
-        
-        long bytesToSkip = Math.min(n, fileData.length - position);
-        position += bytesToSkip;
-        
-        return bytesToSkip;
     }
     
     @Override
     public int available() throws IOException {
-        if (fileData == null) {
-            loadFileData();
+        try {
+            if (fileData == null) {
+                loadFileData();
+            }
+            
+            return Math.max(0, fileData.length - position);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("获取可用数据失败", e);
         }
-        
-        return fileData.length - position;
     }
     
     @Override
     public void close() throws IOException {
-        // 清理资源
-        fileData = null;
-        position = 0;
-        dataLoaded = false;
+        try {
+            // 清理资源
+            fileData = null;
+            position = 0;
+            dataLoaded = false;
+        } catch (Exception e) {
+            // 忽略关闭时的异常
+        }
     }
     
     @Override
@@ -138,13 +197,64 @@ public class FSInputStream extends InputStream {
      * 获取文件大小
      */
     public long getFileSize() {
-        return statInfo != null ? statInfo.getSize() : 0;
+        try {
+            return statInfo != null ? statInfo.getSize() : 0;
+        } catch (Exception e) {
+            return 0;
+        }
     }
     
     /**
      * 获取文件路径
      */
     public String getFilePath() {
-        return statInfo != null ? statInfo.getPath() : null;
+        try {
+            return statInfo != null ? statInfo.getPath() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    /**
+     * 重置到文件开头
+     */
+    public void reset() throws IOException {
+        try {
+            position = 0;
+        } catch (Exception e) {
+            throw new IOException("重置文件位置失败", e);
+        }
+    }
+    
+    /**
+     * 获取当前位置
+     */
+    public long getPosition() {
+        return position;
+    }
+    
+    /**
+     * 设置位置
+     */
+    public void seek(long pos) throws IOException {
+        try {
+            if (pos < 0) {
+                throw new IllegalArgumentException("位置不能为负数: " + pos);
+            }
+            
+            if (fileData == null) {
+                loadFileData();
+            }
+            
+            if (pos > fileData.length) {
+                throw new IllegalArgumentException("位置超出文件大小: " + pos + " > " + fileData.length);
+            }
+            
+            position = (int) pos;
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("设置文件位置失败", e);
+        }
     }
 }

@@ -215,10 +215,10 @@ public class FileSystemTestCases {
                 
                 if (clusterInfo.getDataServer() != null) {
                     System.out.println("   DataServer数量: " + clusterInfo.getDataServer().size());
-                    for (int i = 0; i < Math.min(3, clusterInfo.getDataServer().size()); i++) {
-                        var ds = clusterInfo.getDataServer().get(i);
-                        System.out.println("     DataServer " + (i+1) + ": " + ds.getHost() + ":" + ds.getPort());
-                    }
+                                for (int i = 0; i < Math.min(3, clusterInfo.getDataServer().size()); i++) {
+                com.ksyun.campus.client.domain.DataServerMsg ds = clusterInfo.getDataServer().get(i);
+                System.out.println("     DataServer " + (i+1) + ": " + ds.getHost() + ":" + ds.getPort());
+            }
                 }
             } else {
                 System.out.println("   集群信息获取失败");
@@ -242,18 +242,30 @@ public class FileSystemTestCases {
         try {
             // 5.1 测试访问不存在的文件
             System.out.println("5.1 测试访问不存在的文件");
-            StatInfo nonExistentFile = fileSystem.getFileStats("/non/existent/file.txt");
-            System.out.println("   不存在的文件状态: " + (nonExistentFile == null ? "null" : "非null"));
+            try {
+                StatInfo nonExistentFile = fileSystem.getFileStats("/non/existent/file.txt");
+                System.out.println("   不存在的文件状态: " + (nonExistentFile == null ? "null" : "非null"));
+            } catch (Exception e) {
+                System.out.println("   访问不存在文件异常: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
             
             // 5.2 测试访问不存在的目录
             System.out.println("5.2 测试访问不存在的目录");
-            List<StatInfo> nonExistentDir = fileSystem.listFileStats("/non/existent/directory");
-            System.out.println("   不存在的目录列表: " + (nonExistentDir == null ? "null" : "非null"));
+            try {
+                List<StatInfo> nonExistentDir = fileSystem.listFileStats("/non/existent/directory");
+                System.out.println("   不存在的目录列表: " + (nonExistentDir == null ? "null" : "非null"));
+            } catch (Exception e) {
+                System.out.println("   访问不存在目录异常: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
             
             // 5.3 测试删除不存在的文件
             System.out.println("5.3 测试删除不存在的文件");
-            boolean deleteNonExistent = fileSystem.delete("/non/existent/file.txt");
-            System.out.println("   删除不存在文件结果: " + deleteNonExistent);
+            try {
+                boolean deleteNonExistent = fileSystem.delete("/non/existent/file.txt");
+                System.out.println("   删除不存在文件结果: " + deleteNonExistent);
+            } catch (Exception e) {
+                System.out.println("   删除不存在文件异常: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
             
             // 5.4 测试空路径
             System.out.println("5.4 测试空路径");
@@ -261,7 +273,61 @@ public class FileSystemTestCases {
                 fileSystem.mkdir("");
                 System.out.println("   空路径创建目录成功");
             } catch (Exception e) {
-                System.out.println("   空路径创建目录失败: " + e.getMessage());
+                System.out.println("   空路径创建目录失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            
+            // 5.5 测试null路径
+            System.out.println("5.5 测试null路径");
+            try {
+                fileSystem.mkdir(null);
+                System.out.println("   null路径创建目录成功");
+            } catch (Exception e) {
+                System.out.println("   null路径创建目录失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            
+            // 5.6 测试无效路径格式
+            System.out.println("5.6 测试无效路径格式");
+            try {
+                fileSystem.mkdir("invalid/path");
+                System.out.println("   无效路径格式创建目录成功");
+            } catch (Exception e) {
+                System.out.println("   无效路径格式创建目录失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            
+            // 5.7 测试文件路径创建目录
+            System.out.println("5.7 测试文件路径创建目录");
+            try {
+                fileSystem.mkdir("/test_file_path/");
+                System.out.println("   文件路径创建目录成功");
+            } catch (Exception e) {
+                System.out.println("   文件路径创建目录失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            
+            // 5.8 测试目录路径创建文件
+            System.out.println("5.8 测试目录路径创建文件");
+            try {
+                fileSystem.create("/test_dir_path/");
+                System.out.println("   目录路径创建文件成功");
+            } catch (Exception e) {
+                System.out.println("   目录路径创建文件失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            
+            // 5.9 测试写入空数据
+            System.out.println("5.9 测试写入空数据");
+            try {
+                fileSystem.writeFile("/test_empty_data.txt", new byte[0]);
+                System.out.println("   写入空数据成功");
+            } catch (Exception e) {
+                System.out.println("   写入空数据失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+            
+            // 5.10 测试写入null数据
+            System.out.println("5.10 测试写入null数据");
+            try {
+                fileSystem.writeFile("/test_null_data.txt", null);
+                System.out.println("   写入null数据成功");
+            } catch (Exception e) {
+                System.out.println("   写入null数据失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }
             
         } catch (Exception e) {

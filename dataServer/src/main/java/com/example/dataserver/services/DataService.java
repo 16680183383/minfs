@@ -47,8 +47,11 @@ public class DataService {
 
     /**
      * 分块读取文件并校验MD5
+     * @param path 文件路径
+     * @param offset 偏移量（字节）
+     * @param length 读取长度（字节），-1表示读取到文件末尾
      */
-    public byte[] readWithChunk(String path) {
+    public byte[] readWithChunk(String path, int offset, int length) {
         try {
             // 1. 读取本地MD5清单文件（替代从metaServer获取）
             String md5ListPath = path + "/md5_list.txt";
@@ -97,8 +100,29 @@ public class DataService {
                 bos.write(chunkData);
             }
 
-            System.out.println("[INFO] 文件" + path + "读取完成，MD5校验通过");
-            return bos.toByteArray();
+            byte[] fullData = bos.toByteArray();
+            System.out.println("[INFO] 文件" + path + "读取完成，MD5校验通过，总大小：" + fullData.length + "字节");
+            
+            // 处理分块读取
+            if (offset > 0 || length > 0) {
+                if (offset >= fullData.length) {
+                    System.out.println("[WARN] 偏移量超出文件大小: offset=" + offset + ", fileSize=" + fullData.length);
+                    return new byte[0];
+                }
+                
+                int actualLength = length > 0 ? length : fullData.length - offset;
+                int endPos = Math.min(offset + actualLength, fullData.length);
+                int resultLength = endPos - offset;
+                
+                byte[] result = new byte[resultLength];
+                System.arraycopy(fullData, offset, result, 0, resultLength);
+                
+                System.out.println("[INFO] 分块读取成功: path=" + path + ", offset=" + offset + 
+                                 ", length=" + actualLength + ", actualLength=" + resultLength);
+                return result;
+            }
+            
+            return fullData;
         } catch (Exception e) {
             System.err.println("[ERROR] 分块读取失败：" + e.getMessage());
             throw new RuntimeException("Read with chunk failed", e);
