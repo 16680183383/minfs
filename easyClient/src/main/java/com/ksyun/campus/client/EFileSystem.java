@@ -8,9 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
-import org.apache.hc.client5.http.config.ConnectionConfig;
-import org.apache.hc.core5.http.io.SocketConfig;
-import org.apache.hc.core5.util.Timeout;
 
 import java.io.IOException;
 import java.net.URLEncoder;
