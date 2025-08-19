@@ -300,34 +300,6 @@ public class ZkMetaServerService implements ApplicationRunner {
         return followerAddresses;
     }
     
-    /**
-     * 获取当前节点地址
-     */
-    public String getCurrentNodeAddress() {
-        return serverHost + ":" + serverPort;
-    }
-    
-    /**
-     * 获取ZK连接状态
-     */
-    public boolean isZkConnected() {
-        return zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED;
-    }
-    
-    /**
-     * 获取ZK实例
-     */
-    public ZooKeeper getZooKeeper() {
-        return zooKeeper;
-    }
-    
-    /**
-     * 获取当前节点路径
-     */
-    public String getMetaServerPath() {
-        return metaServerPath;
-    }
-    
     @PreDestroy
     public void destroy() {
         isRunning.set(false);
