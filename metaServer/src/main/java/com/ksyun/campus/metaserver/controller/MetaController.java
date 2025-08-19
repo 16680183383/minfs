@@ -18,6 +18,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import com.ksyun.campus.metaserver.domain.ReplicaData;
 
 @Slf4j
 @RestController
@@ -163,11 +165,13 @@ public class MetaController {
                 log.warn("创建目录失败: 路径格式错误: {}", path);
                 return ResponseEntity.badRequest().build();
             }
-            if (!path.endsWith("/")) {
-                path = path + "/"; // 确保目录路径以/结尾
+            if (path.endsWith("/")) {
+                log.warn("创建目录失败: 目录路径不能以/结尾: {}", path);
+                return ResponseEntity.badRequest().build();
             }
             
             log.info("创建目录: path={}", path);
+            
             if (!zkMetaServerService.isLeader()) {
                 String leader = zkMetaServerService.getLeaderAddress();
                 if (leader != null) {
@@ -181,6 +185,7 @@ public class MetaController {
             }
             
             StatInfo statInfo = metaService.createDirectory(path);
+            
             // 为保证Follower侧的父目录链也存在，这里将父链全部复制（幂等）
             try {
                 String p = path;
@@ -428,33 +433,119 @@ public class MetaController {
     public ResponseEntity<Map<String, Object>> getClusterInfo() {
         log.info("获取集群信息");
         Map<String, Object> clusterInfo = new HashMap<>();
-        
-        // 获取数据服务器信息
-        List<Map<String, Object>> dataServers = metaService.getDataServers().stream()
-                .map(server -> {
-                    Map<String, Object> serverInfo = new HashMap<>();
-                    // 从Map中获取服务器信息
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> serverMap = (Map<String, Object>) server;
-                    serverInfo.put("id", serverMap.get("id"));
-                    serverInfo.put("address", serverMap.get("address"));
-                    serverInfo.put("capacity", serverMap.get("capacity"));
-                    serverInfo.put("usedSpace", serverMap.get("usedSpace"));
-                    serverInfo.put("active", serverMap.get("active"));
-                    return serverInfo;
-                })
-                .toList();
-        
-        clusterInfo.put("dataServers", dataServers);
-        clusterInfo.put("totalDataServers", dataServers.size());
-        clusterInfo.put("activeDataServers", dataServers.stream()
-                .mapToInt(server -> (Boolean) server.get("active") ? 1 : 0)
-                .sum());
-        
+        try {
+            // 1. 获取MetaServer集群信息
+            Map<String, Object> metaServerInfo = new HashMap<>();
+            metaServerInfo.put("isLeader", zkMetaServerService.isLeader());
+            metaServerInfo.put("leaderAddress", zkMetaServerService.getLeaderAddress());
+            metaServerInfo.put("currentAddress", zkMetaServerService.getCurrentNodeAddress());
+            metaServerInfo.put("followerAddresses", zkMetaServerService.getFollowerAddresses());
+            clusterInfo.put("metaServers", metaServerInfo);
+
+            // 2. 获取DataServer集群信息
+            List<Map<String, Object>> dataServers = metaService.getDataServers().stream()
+                    .map(server -> {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> serverMap = (Map<String, Object>) server;
+                        Map<String, Object> serverInfo = new HashMap<>();
+                        serverInfo.put("address", serverMap.get("address"));
+                        serverInfo.put("host", serverMap.get("host"));
+                        serverInfo.put("port", serverMap.get("port"));
+                        serverInfo.put("active", serverMap.get("status").equals("ACTIVE"));
+                        serverInfo.put("totalCapacity", serverMap.get("totalCapacity"));
+                        serverInfo.put("usedCapacity", serverMap.get("usedCapacity"));
+                        serverInfo.put("remainingCapacity", serverMap.get("remainingCapacity"));
+                        return serverInfo;
+                    }).toList();
+            clusterInfo.put("dataServers", dataServers);
+            clusterInfo.put("totalDataServers", dataServers.size());
+            clusterInfo.put("activeDataServers", dataServers.stream()
+                    .mapToInt(server -> (Boolean) server.get("active") ? 1 : 0).sum());
+
+            // 3. 获取主副本分布统计
+            Map<String, Object> replicaDistribution = getPrimaryReplicaDistribution();
+            clusterInfo.put("replicaDistribution", replicaDistribution);
+
+            // 4. 获取集群健康状态
+            Map<String, Object> healthStatus = new HashMap<>();
+            healthStatus.put("metaServerHealthy", zkMetaServerService.isLeader() || zkMetaServerService.getLeaderAddress() != null);
+            healthStatus.put("dataServerHealthy", dataServers.stream().anyMatch(server -> (Boolean) server.get("active")));
+            healthStatus.put("overallHealth", "HEALTHY");
+            clusterInfo.put("healthStatus", healthStatus);
+        } catch (Exception e) {
+            log.error("获取集群信息失败", e);
+            clusterInfo.put("error", "获取集群信息失败: " + e.getMessage());
+        }
         return ResponseEntity.ok(clusterInfo);
     }
     
-
+    /**
+     * 获取主副本分布统计
+     */
+    private Map<String, Object> getPrimaryReplicaDistribution() {
+        Map<String, Object> distribution = new HashMap<>();
+        
+        try {
+            // 获取所有文件元数据
+            List<StatInfo> allFiles = metaService.getAllFiles();
+            
+            // 统计每个DataServer上的主副本数量
+            Map<String, Integer> primaryReplicaCount = new HashMap<>();
+            Map<String, Integer> totalReplicaCount = new HashMap<>();
+            
+            for (StatInfo fileInfo : allFiles) {
+                if (fileInfo.getType() == FileType.File && fileInfo.getReplicaData() != null) {
+                    for (ReplicaData replica : fileInfo.getReplicaData()) {
+                        String dsNode = replica.dsNode;
+                        
+                        // 统计总副本数
+                        totalReplicaCount.put(dsNode, totalReplicaCount.getOrDefault(dsNode, 0) + 1);
+                        
+                        // 统计主副本数
+                        if (replica.isPrimary) {
+                            primaryReplicaCount.put(dsNode, primaryReplicaCount.getOrDefault(dsNode, 0) + 1);
+                        }
+                    }
+                }
+            }
+            
+            distribution.put("primaryReplicaCount", primaryReplicaCount);
+            distribution.put("totalReplicaCount", totalReplicaCount);
+            distribution.put("totalFiles", allFiles.stream()
+                    .filter(f -> f.getType() == FileType.File)
+                    .count());
+            distribution.put("totalDirectories", allFiles.stream()
+                    .filter(f -> f.getType() == FileType.Directory)
+                    .count());
+            
+            log.info("主副本分布统计完成: {} 个文件, {} 个目录", 
+                    distribution.get("totalFiles"), distribution.get("totalDirectories"));
+            
+        } catch (Exception e) {
+            log.error("获取主副本分布统计失败", e);
+            distribution.put("error", "获取主副本分布统计失败: " + e.getMessage());
+        }
+        
+        return distribution;
+    }
+    
+    /**
+     * 获取主副本分布统计
+     * 专门用于查看当前集群节点上的主副本分布情况
+     */
+    @RequestMapping("replica/distribution")
+    public ResponseEntity<Map<String, Object>> getReplicaDistribution() {
+        log.info("获取主副本分布统计");
+        try {
+            Map<String, Object> distribution = getPrimaryReplicaDistribution();
+            return ResponseEntity.ok(distribution);
+        } catch (Exception e) {
+            log.error("获取主副本分布统计失败", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "获取主副本分布统计失败: " + e.getMessage());
+            return ResponseEntity.status(500).body(error);
+        }
+    }
     
     /**
      * 手动触发FSCK检查

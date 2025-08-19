@@ -260,8 +260,8 @@ public class DataServerClientService {
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
             headers.set("X-Is-Replica-Sync", "true");
 
-            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
-            String queryParams = String.format("?path=%s&offset=%d&length=%d", encodedPath, offset, length);
+            // 修复：避免重复编码，直接使用原始路径
+            String queryParams = String.format("?path=%s&offset=%d&length=%d", path, offset, length);
             ResponseEntity<String> response = restTemplate.exchange(
                     url + queryParams,
                     HttpMethod.POST,
@@ -284,9 +284,8 @@ public class DataServerClientService {
      */
     public boolean checkFileExistsOnDataServer(String dsAddress, String path) {
         try {
-            // 对路径进行URL编码，确保特殊字符正确传递
-            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
-            String url = "http://" + dsAddress + "/checkFileExists?path=" + encodedPath;
+            // 修复：避免重复编码，直接使用原始路径
+            String url = "http://" + dsAddress + "/checkFileExists?path=" + path;
             ResponseEntity<Boolean> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -305,9 +304,8 @@ public class DataServerClientService {
      */
     public byte[] readFromDataServer(String dsAddress, String path) {
         try {
-            // 对路径进行URL编码，确保特殊字符正确传递
-            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
-            String url = "http://" + dsAddress + "/read?path=" + encodedPath + "&offset=0&length=-1";
+            // 修复：避免重复编码，直接使用原始路径
+            String url = "http://" + dsAddress + "/read?path=" + path + "&offset=0&length=-1";
             ResponseEntity<byte[]> resp = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -329,9 +327,8 @@ public class DataServerClientService {
      */
     public boolean writeReplicaToDataServer(String dsAddress, String path, byte[] data) {
         try {
-            // 对路径进行URL编码，确保特殊字符正确传递
-            String encodedPath = java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8.name());
-            String url = "http://" + dsAddress + "/write?path=" + encodedPath + "&offset=0&length=" + (data == null ? 0 : data.length);
+            // 修复：避免重复编码，直接使用原始路径
+            String url = "http://" + dsAddress + "/write?path=" + path + "&offset=0&length=" + (data == null ? 0 : data.length);
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Is-Replica-Sync", "true");
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);

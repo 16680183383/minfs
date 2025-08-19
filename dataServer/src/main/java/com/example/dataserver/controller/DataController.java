@@ -170,7 +170,8 @@ public class DataController {
                 return ResponseEntity.badRequest().body(false);
             }
             
-            String localChunkPath = dataService.getLocalFilePath(path + "/chunk_0"); // 检查第一个块（简化）
+            // 修复：检查第一个块文件（使用新的路径格式）
+            String localChunkPath = dataService.getLocalFilePath(path + "_chunk_0");
             boolean exists = new File(localChunkPath).exists();
             return ResponseEntity.ok(exists);
         } catch (Exception e) {

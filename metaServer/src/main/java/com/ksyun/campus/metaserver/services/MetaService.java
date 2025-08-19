@@ -267,7 +267,18 @@ public class MetaService {
             // 4. 更新副本信息与元数据
             List<ReplicaData> replicaDataList = convertToReplicaData(path, successLocations, offset, length);
             statInfo.setReplicaData(replicaDataList);
-            statInfo.setSize(Math.max(statInfo.getSize(), offset + length));
+            
+            // 修复：正确计算文件大小
+            // 如果offset + length大于当前文件大小，则更新为新的文件大小
+            // 如果offset + length小于等于当前文件大小，则保持当前大小不变
+            long newSize = offset + length;
+            if (newSize > statInfo.getSize()) {
+                statInfo.setSize(newSize);
+                log.info("更新文件大小: {} -> {}", path, newSize);
+            } else {
+                log.info("保持文件大小: {} -> {}", path, statInfo.getSize());
+            }
+            
             statInfo.setMtime(System.currentTimeMillis());
             metadataStorage.saveMetadata(path, statInfo);
             log.info("写入文件成功: {}, 大小: {}, 副本位置: {}", path, statInfo.getSize(), successLocations);
@@ -395,6 +406,8 @@ public class MetaService {
             List<StatInfo> children = listFiles(dirPath);
             if (children.isEmpty()) {
                 log.debug("目录为空，直接删除: {}", dirPath);
+                // 删除空目录的元数据
+                metadataStorage.deleteMetadata(dirPath);
                 return true;
             }
             

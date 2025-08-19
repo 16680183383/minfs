@@ -7,6 +7,7 @@ import com.ksyun.campus.client.domain.StatInfo;
 import com.ksyun.campus.client.domain.ClusterInfo;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 文件系统测试用例集合
@@ -118,8 +119,40 @@ public class FileSystemTestCases {
             
             // 2.6 清理测试文件
             System.out.println("2.6 清理测试文件");
+            System.out.println("   [开始] 删除文件 /test_file_ops/hello.txt");
             boolean deleteFile = fileSystem.delete("/test_file_ops/hello.txt");
+            System.out.println("   [结束] 删除文件结果: " + deleteFile);
+            
+            // 验证文件删除后元数据也被清理
+            System.out.println("   [验证] 检查删除后的文件状态");
+            try {
+                StatInfo deletedFileStats = fileSystem.getFileStats("/test_file_ops/hello.txt");
+                if (deletedFileStats == null) {
+                    System.out.println("   [成功] 文件元数据已正确删除");
+                } else {
+                    System.out.println("   [警告] 文件元数据仍然存在: " + deletedFileStats.getPath());
+                }
+            } catch (Exception e) {
+                System.out.println("   [成功] 文件元数据访问失败，说明已删除: " + e.getMessage());
+            }
+            
+            System.out.println("   [开始] 删除目录 /test_file_ops");
             boolean deleteDir = fileSystem.delete("/test_file_ops");
+            System.out.println("   [结束] 删除目录结果: " + deleteDir);
+            
+            // 验证目录删除后元数据也被清理
+            System.out.println("   [验证] 检查删除后的目录状态");
+            try {
+                List<StatInfo> deletedDirStats = fileSystem.listFileStats("/test_file_ops");
+                if (deletedDirStats == null) {
+                    System.out.println("   [成功] 目录元数据已正确删除");
+                } else {
+                    System.out.println("   [警告] 目录元数据仍然存在，包含 " + deletedDirStats.size() + " 个子项");
+                }
+            } catch (Exception e) {
+                System.out.println("   [成功] 目录元数据访问失败，说明已删除: " + e.getMessage());
+            }
+            
             System.out.println("   删除文件: " + deleteFile + ", 删除目录: " + deleteDir);
             
         } catch (Exception e) {
@@ -185,8 +218,40 @@ public class FileSystemTestCases {
             
             // 3.4 清理测试文件
             System.out.println("3.4 清理测试文件");
+            System.out.println("   [开始] 删除文件 /test_write_read/bigfile.txt");
             boolean deleteFile = fileSystem.delete("/test_write_read/bigfile.txt");
+            System.out.println("   [结束] 删除文件结果: " + deleteFile);
+            
+            // 验证文件删除后元数据也被清理
+            System.out.println("   [验证] 检查删除后的文件状态");
+            try {
+                StatInfo deletedFileStats = fileSystem.getFileStats("/test_write_read/bigfile.txt");
+                if (deletedFileStats == null) {
+                    System.out.println("   [成功] 文件元数据已正确删除");
+                } else {
+                    System.out.println("   [警告] 文件元数据仍然存在: " + deletedFileStats.getPath());
+                }
+            } catch (Exception e) {
+                System.out.println("   [成功] 文件元数据访问失败，说明已删除: " + e.getMessage());
+            }
+            
+            System.out.println("   [开始] 删除目录 /test_write_read");
             boolean deleteDir = fileSystem.delete("/test_write_read");
+            System.out.println("   [结束] 删除目录结果: " + deleteDir);
+            
+            // 验证目录删除后元数据也被清理
+            System.out.println("   [验证] 检查删除后的目录状态");
+            try {
+                List<StatInfo> deletedDirStats = fileSystem.listFileStats("/test_write_read");
+                if (deletedDirStats == null) {
+                    System.out.println("   [成功] 目录元数据已正确删除");
+                } else {
+                    System.out.println("   [警告] 目录元数据仍然存在，包含 " + deletedDirStats.size() + " 个子项");
+                }
+            } catch (Exception e) {
+                System.out.println("   [成功] 目录元数据访问失败，说明已删除: " + e.getMessage());
+            }
+            
             System.out.println("   删除文件: " + deleteFile + ", 删除目录: " + deleteDir);
             
         } catch (Exception e) {
@@ -210,16 +275,95 @@ public class FileSystemTestCases {
             ClusterInfo clusterInfo = fileSystem.getClusterInfo();
             if (clusterInfo != null) {
                 System.out.println("   集群信息获取成功");
-                System.out.println("   主MetaServer: " + clusterInfo.getMasterMetaServer());
-                System.out.println("   从MetaServer: " + clusterInfo.getSlaveMetaServer());
                 
-                if (clusterInfo.getDataServer() != null) {
-                    System.out.println("   DataServer数量: " + clusterInfo.getDataServer().size());
-                                for (int i = 0; i < Math.min(3, clusterInfo.getDataServer().size()); i++) {
-                com.ksyun.campus.client.domain.DataServerMsg ds = clusterInfo.getDataServer().get(i);
-                System.out.println("     DataServer " + (i+1) + ": " + ds.getHost() + ":" + ds.getPort());
-            }
+                // 检查是否有错误
+                if (clusterInfo.getError() != null) {
+                    System.err.println("   集群信息获取错误: " + clusterInfo.getError());
+                    return;
                 }
+                
+                // 4.2 显示MetaServer集群信息
+                System.out.println("4.2 MetaServer集群信息");
+                if (clusterInfo.getMetaServers() != null) {
+                    Map<String, Object> metaServers = clusterInfo.getMetaServers();
+                    System.out.println("   是否为Leader: " + metaServers.get("isLeader"));
+                    System.out.println("   Leader地址: " + metaServers.get("leaderAddress"));
+                    System.out.println("   当前节点地址: " + metaServers.get("currentAddress"));
+                    System.out.println("   Follower地址列表: " + metaServers.get("followerAddresses"));
+                } else {
+                    System.out.println("   MetaServer信息为空");
+                }
+                
+                // 4.3 显示DataServer集群信息
+                System.out.println("4.3 DataServer集群信息");
+                if (clusterInfo.getDataServers() != null) {
+                    System.out.println("   总DataServer数量: " + clusterInfo.getTotalDataServers());
+                    System.out.println("   活跃DataServer数量: " + clusterInfo.getActiveDataServers());
+                    
+                    List<Map<String, Object>> dataServers = clusterInfo.getDataServers();
+                    System.out.println("   DataServer详细信息:");
+                    for (int i = 0; i < Math.min(5, dataServers.size()); i++) {
+                        Map<String, Object> ds = dataServers.get(i);
+                        System.out.println("     DataServer " + (i+1) + ": " + ds.get("address") + 
+                                         " (容量: " + ds.get("capacity") + 
+                                         ", 已用: " + ds.get("usedSpace") + 
+                                         ", 活跃: " + ds.get("active") + ")");
+                    }
+                    if (dataServers.size() > 5) {
+                        System.out.println("     ... 还有 " + (dataServers.size() - 5) + " 个DataServer");
+                    }
+                } else {
+                    System.out.println("   DataServer信息为空");
+                }
+                
+                // 4.4 显示主副本分布统计
+                System.out.println("4.4 主副本分布统计");
+                if (clusterInfo.getReplicaDistribution() != null) {
+                    Map<String, Object> replicaDist = clusterInfo.getReplicaDistribution();
+                    System.out.println("   总文件数: " + replicaDist.get("totalFiles"));
+                    System.out.println("   总目录数: " + replicaDist.get("totalDirectories"));
+                    
+                    // 显示主副本分布
+                    if (replicaDist.get("primaryReplicaCount") instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Integer> primaryCount = (Map<String, Integer>) replicaDist.get("primaryReplicaCount");
+                        System.out.println("   各节点主副本分布:");
+                        for (Map.Entry<String, Integer> entry : primaryCount.entrySet()) {
+                            System.out.println("     " + entry.getKey() + ": " + entry.getValue() + " 个主副本");
+                        }
+                    }
+                    
+                    // 显示总副本分布
+                    if (replicaDist.get("totalReplicaCount") instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Integer> totalCount = (Map<String, Integer>) replicaDist.get("totalReplicaCount");
+                        System.out.println("   各节点总副本分布:");
+                        for (Map.Entry<String, Integer> entry : totalCount.entrySet()) {
+                            System.out.println("     " + entry.getKey() + ": " + entry.getValue() + " 个副本");
+                        }
+                    }
+                } else {
+                    System.out.println("   副本分布信息为空");
+                }
+                
+                // 4.5 显示集群健康状态
+                System.out.println("4.5 集群健康状态");
+                if (clusterInfo.getHealthStatus() != null) {
+                    Map<String, Object> health = clusterInfo.getHealthStatus();
+                    System.out.println("   MetaServer健康: " + health.get("metaServerHealthy"));
+                    System.out.println("   DataServer健康: " + health.get("dataServerHealthy"));
+                    System.out.println("   整体健康状态: " + health.get("overallHealth"));
+                } else {
+                    System.out.println("   健康状态信息为空");
+                }
+                
+                // 兼容旧版本格式
+                if (clusterInfo.getMasterMetaServer() != null) {
+                    System.out.println("4.6 旧版本兼容信息");
+                    System.out.println("   主MetaServer: " + clusterInfo.getMasterMetaServer());
+                    System.out.println("   从MetaServer: " + clusterInfo.getSlaveMetaServer());
+                }
+                
             } else {
                 System.out.println("   集群信息获取失败");
             }
@@ -317,6 +461,15 @@ public class FileSystemTestCases {
             try {
                 fileSystem.writeFile("/test_empty_data.txt", new byte[0]);
                 System.out.println("   写入空数据成功");
+                
+                // 验证空文件是否正确创建
+                StatInfo emptyFileStats = fileSystem.getFileStats("/test_empty_data.txt");
+                if (emptyFileStats != null) {
+                    System.out.println("   空文件状态: 大小=" + emptyFileStats.getSize() + "字节");
+                }
+                
+                // 清理测试文件
+                fileSystem.delete("/test_empty_data.txt");
             } catch (Exception e) {
                 System.out.println("   写入空数据失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }

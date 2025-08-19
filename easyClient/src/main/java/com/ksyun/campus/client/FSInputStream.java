@@ -50,6 +50,14 @@ public class FSInputStream extends InputStream {
                 throw new IOException("文件路径为空");
             }
             
+            // 检查文件大小
+            if (statInfo.getSize() == 0) {
+                // 文件大小为0，设置空数据
+                fileData = new byte[0];
+                dataLoaded = true;
+                return;
+            }
+            
             // 从MetaServer读取文件数据（支持分块读取）
             String metaServerAddress = fileSystem.getMetaServerAddress();
             if (metaServerAddress == null || metaServerAddress.trim().isEmpty()) {
@@ -69,7 +77,7 @@ public class FSInputStream extends InputStream {
             }
             
             fileData = response.getBytes("UTF-8");
-            if (fileData == null || fileData.length == 0) {
+            if (fileData == null) {
                 throw new IOException("文件数据为空");
             }
             

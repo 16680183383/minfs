@@ -174,8 +174,8 @@ public class EFileSystem extends FileSystem {
         if (!path.startsWith("/")) {
             throw new IllegalArgumentException("目录路径必须以/开头: " + path);
         }
-        if (!path.endsWith("/")) {
-            path = path + "/"; // 确保目录路径以/结尾
+        if (path.endsWith("/")) {
+            throw new IllegalArgumentException("目录路径不能以/结尾: " + path);
         }
         
         try {
@@ -261,8 +261,8 @@ public class EFileSystem extends FileSystem {
         if (!path.startsWith("/")) {
             throw new IllegalArgumentException("目录路径必须以/开头: " + path);
         }
-        if (!path.endsWith("/")) {
-            path = path + "/"; // 确保目录路径以/结尾
+        if (path.endsWith("/")) {
+            throw new IllegalArgumentException("目录路径不能以/结尾: " + path);
         }
         
         try {
@@ -337,9 +337,7 @@ public class EFileSystem extends FileSystem {
         if (data == null) {
             throw new IllegalArgumentException("文件数据不能为空");
         }
-        if (data.length == 0) {
-            throw new IllegalArgumentException("文件数据不能为空");
-        }
+        // 允许写入空文件，所以移除对data.length == 0的检查
         
         try {
             String metaServerAddress = getMetaServerAddress();

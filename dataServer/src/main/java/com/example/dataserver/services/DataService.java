@@ -46,7 +46,7 @@ public class DataService {
     }
 
     /**
-     * 分块读取文件并校验MD5
+     * 分块读取文件内容
      * @param path 文件路径
      * @param offset 偏移量（字节）
      * @param length 读取长度（字节），-1表示读取到文件末尾
@@ -54,32 +54,38 @@ public class DataService {
     public byte[] readWithChunk(String path, int offset, int length) {
         try {
             // 1. 读取本地MD5清单文件（替代从metaServer获取）
-            String md5ListPath = path + "/md5_list.txt";
+            String md5ListPath = path + "_md5_list.txt";
             String localMd5ListPath = getLocalFilePath(md5ListPath);
             List<String> expectedChunkMd5 = readMd5ListFromLocal(localMd5ListPath);
             if (expectedChunkMd5.isEmpty()) {
                 throw new RuntimeException("MD5清单文件为空：" + localMd5ListPath);
             }
 
-            // 2. 获取块文件并校验（原有逻辑不变）
-            File chunkDir = new File(getLocalFilePath(path));
-            if (!chunkDir.exists()) {
-                throw new RuntimeException("File not found: " + path);
+            // 2. 获取块文件并校验（修复路径处理）
+            List<File> chunkFiles = new ArrayList<>();
+            for (int i = 0; i < expectedChunkMd5.size(); i++) {
+                String chunkPath = path + "_chunk_" + i;
+                File chunkFile = new File(getLocalFilePath(chunkPath));
+                if (!chunkFile.exists()) {
+                    throw new RuntimeException("块文件不存在：" + chunkPath);
+                }
+                chunkFiles.add(chunkFile);
             }
-            File[] chunkFiles = chunkDir.listFiles((dir, name) -> name.startsWith("chunk_"));
-            if (chunkFiles == null || chunkFiles.length == 0) {
+            
+            if (chunkFiles.isEmpty()) {
                 throw new RuntimeException("No chunks found for: " + path);
             }
+            
             // 校验块数量与MD5清单数量一致
-            if (chunkFiles.length != expectedChunkMd5.size()) {
-                throw new RuntimeException("块数量与MD5清单不匹配：块数" + chunkFiles.length + "，MD5数" + expectedChunkMd5.size());
+            if (chunkFiles.size() != expectedChunkMd5.size()) {
+                throw new RuntimeException("块数量与MD5清单不匹配：块数" + chunkFiles.size() + "，MD5数" + expectedChunkMd5.size());
             }
 
             // 3. 按块号排序并校验MD5
-            List<File> sortedChunks = Arrays.stream(chunkFiles)
+            List<File> sortedChunks = chunkFiles.stream()
                     .sorted((f1, f2) -> {
-                        int num1 = Integer.parseInt(f1.getName().split("_")[1]);
-                        int num2 = Integer.parseInt(f2.getName().split("_")[1]);
+                        int num1 = Integer.parseInt(f1.getName().split("_chunk_")[1]);
+                        int num2 = Integer.parseInt(f2.getName().split("_chunk_")[1]);
                         return Integer.compare(num1, num2);
                     })
                     .collect(Collectors.toList());
@@ -180,13 +186,13 @@ public class DataService {
                 chunkMd5List.add(chunkMd5);
                 System.out.println("[INFO] 块 " + i + " MD5：" + chunkMd5);
 
-                // 写入本地块（所有请求都执行）
-                String chunkPath = path + "/chunk_" + i;
+                // 修复：文件应该直接存储在path路径下，而不是在path下创建子目录
+                String chunkPath = path + "_chunk_" + i;
                 writeToLocal(getLocalFilePath(chunkPath), chunk, 0);
             }
 
             // 2. 生成MD5清单文件（与分块文件同目录，不依赖metaServer）
-            String md5ListPath = path + "/md5_list.txt";
+            String md5ListPath = path + "_md5_list.txt";
             String localMd5ListPath = getLocalFilePath(md5ListPath);
             // 新增：将List<String>格式化为字符串，再转为byte[]（适配方法参数）
             StringBuilder md5Content = new StringBuilder();
@@ -270,32 +276,94 @@ public class DataService {
     }
 
     /**
-     * 删除本地文件（包括分块目录和MD5清单）
+     * 删除本地文件（包括分块文件和MD5清单）
      * @param path 文件路径
      * @return 是否删除成功
      */
     public boolean deleteFileLocally(String path) {
         try {
-            String localFilePath = getLocalFilePath(path);
-            File file = new File(localFilePath);
-            System.out.println("[INFO] 开始删除本地文件：" + localFilePath);
+            System.out.println("[INFO] 开始删除本地文件：" + path);
 
-            if (!file.exists()) {
-                System.out.println("[WARN] 本地文件不存在，跳过删除：" + localFilePath);
-                return true;
-            }
-
-            // 递归删除目录（文件分块存储在目录中）
-            if (deleteDirectoryRecursively(file)) {
-                System.out.println("[INFO] 本地文件删除成功：" + localFilePath);
-                // 清理缓存
+            // 删除分块文件
+            boolean chunksDeleted = deleteChunkFiles(path);
+            
+            // 删除MD5清单文件
+            boolean md5ListDeleted = deleteMd5ListFile(path);
+            
+            if (chunksDeleted && md5ListDeleted) {
+                System.out.println("[INFO] 本地文件删除成功：" + path);
                 return true;
             } else {
-                System.err.println("[ERROR] 本地文件删除失败：" + localFilePath);
+                System.err.println("[ERROR] 本地文件删除失败：" + path + 
+                                 ", chunksDeleted=" + chunksDeleted + 
+                                 ", md5ListDeleted=" + md5ListDeleted);
                 return false;
             }
         } catch (Exception e) {
             System.err.println("[ERROR] 删除本地文件失败：" + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 删除分块文件
+     */
+    private boolean deleteChunkFiles(String path) {
+        try {
+            boolean allDeleted = true;
+            int chunkIndex = 0;
+            
+            while (true) {
+                String chunkPath = path + "_chunk_" + chunkIndex;
+                String localChunkPath = getLocalFilePath(chunkPath);
+                File chunkFile = new File(localChunkPath);
+                
+                if (!chunkFile.exists()) {
+                    break; // 没有更多分块文件
+                }
+                
+                boolean deleted = chunkFile.delete();
+                if (deleted) {
+                    System.out.println("[INFO] 删除分块文件成功：" + chunkPath);
+                } else {
+                    System.err.println("[ERROR] 删除分块文件失败：" + chunkPath);
+                    allDeleted = false;
+                }
+                
+                chunkIndex++;
+            }
+            
+            return allDeleted;
+        } catch (Exception e) {
+            System.err.println("[ERROR] 删除分块文件失败：" + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 删除MD5清单文件
+     */
+    private boolean deleteMd5ListFile(String path) {
+        try {
+            String md5ListPath = path + "_md5_list.txt";
+            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            File md5ListFile = new File(localMd5ListPath);
+            
+            if (!md5ListFile.exists()) {
+                System.out.println("[INFO] MD5清单文件不存在，跳过删除：" + md5ListPath);
+                return true;
+            }
+            
+            boolean deleted = md5ListFile.delete();
+            if (deleted) {
+                System.out.println("[INFO] 删除MD5清单文件成功：" + md5ListPath);
+            } else {
+                System.err.println("[ERROR] 删除MD5清单文件失败：" + md5ListPath);
+            }
+            
+            return deleted;
+        } catch (Exception e) {
+            System.err.println("[ERROR] 删除MD5清单文件失败：" + e.getMessage());
             return false;
         }
     }
