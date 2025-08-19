@@ -451,8 +451,31 @@ public class MetaService {
     /**
      * 获取所有数据服务器
      */
-    public List<Object> getDataServers() {
-        return new ArrayList<>(zkDataServerService.getAllDataServers().values());
+    public List<Map<String, Object>> getDataServers() {
+        Map<String, Map<String, Object>> allDataServers = zkDataServerService.getAllDataServers();
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        for (Map<String, Object> server : allDataServers.values()) {
+            // 确保所有必要的字段都存在
+            Map<String, Object> serverInfo = new HashMap<>(server);
+            
+            // 确保容量字段存在
+            if (!serverInfo.containsKey("totalCapacity")) {
+                serverInfo.put("totalCapacity", 1024 * 1024 * 1024L); // 1GB 默认值
+            }
+            if (!serverInfo.containsKey("usedCapacity")) {
+                serverInfo.put("usedCapacity", 0L);
+            }
+            if (!serverInfo.containsKey("remainingCapacity")) {
+                long total = (Long) serverInfo.get("totalCapacity");
+                long used = (Long) serverInfo.get("usedCapacity");
+                serverInfo.put("remainingCapacity", Math.max(0, total - used));
+            }
+            
+            result.add(serverInfo);
+        }
+        
+        return result;
     }
     
 

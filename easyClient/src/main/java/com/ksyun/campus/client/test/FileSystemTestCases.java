@@ -215,7 +215,9 @@ public class FileSystemTestCases {
                 System.out.println("   总共读取: " + totalRead + " 字节，分 " + chunkCount + " 块");
                 inputStream.close();
             }
-            
+
+            testCase4_ClusterInformation();
+
             // 3.4 清理测试文件
             System.out.println("3.4 清理测试文件");
             System.out.println("   [开始] 删除文件 /test_write_read/bigfile.txt");
@@ -238,7 +240,7 @@ public class FileSystemTestCases {
             System.out.println("   [开始] 删除目录 /test_write_read");
             boolean deleteDir = fileSystem.delete("/test_write_read");
             System.out.println("   [结束] 删除目录结果: " + deleteDir);
-            
+
             // 验证目录删除后元数据也被清理
             System.out.println("   [验证] 检查删除后的目录状态");
             try {
@@ -251,9 +253,8 @@ public class FileSystemTestCases {
             } catch (Exception e) {
                 System.out.println("   [成功] 目录元数据访问失败，说明已删除: " + e.getMessage());
             }
-            
+
             System.out.println("   删除文件: " + deleteFile + ", 删除目录: " + deleteDir);
-            
         } catch (Exception e) {
             System.err.println("测试用例3执行失败: " + e.getMessage());
             e.printStackTrace();
@@ -282,13 +283,19 @@ public class FileSystemTestCases {
                     return;
                 }
                 
+                // 4.1 MetaServer集群信息:
+                System.out.println("4.1 MetaServer集群信息:");
+                if (clusterInfo.getMetaServers() != null) {
+                    Map<String, Object> metaServers = clusterInfo.getMetaServers();
+                    System.out.println("   Leader地址: " + metaServers.get("leaderAddress"));
+                    System.out.println("   Follower地址列表: " + metaServers.get("followerAddresses"));
+                }
+                
                 // 4.2 显示MetaServer集群信息
                 System.out.println("4.2 MetaServer集群信息");
                 if (clusterInfo.getMetaServers() != null) {
                     Map<String, Object> metaServers = clusterInfo.getMetaServers();
-                    System.out.println("   是否为Leader: " + metaServers.get("isLeader"));
                     System.out.println("   Leader地址: " + metaServers.get("leaderAddress"));
-                    System.out.println("   当前节点地址: " + metaServers.get("currentAddress"));
                     System.out.println("   Follower地址列表: " + metaServers.get("followerAddresses"));
                 } else {
                     System.out.println("   MetaServer信息为空");
@@ -305,8 +312,8 @@ public class FileSystemTestCases {
                     for (int i = 0; i < Math.min(5, dataServers.size()); i++) {
                         Map<String, Object> ds = dataServers.get(i);
                         System.out.println("     DataServer " + (i+1) + ": " + ds.get("address") + 
-                                         " (容量: " + ds.get("capacity") + 
-                                         ", 已用: " + ds.get("usedSpace") + 
+                                         " (容量: " + ds.get("totalCapacity") +
+                                         ", 已用: " + ds.get("usedCapacity") +
                                          ", 活跃: " + ds.get("active") + ")");
                     }
                     if (dataServers.size() > 5) {
@@ -536,7 +543,9 @@ public class FileSystemTestCases {
             
             long readTime = System.currentTimeMillis() - startTime;
             System.out.println("   批量读取文件耗时: " + readTime + " 毫秒");
-            
+
+            testCase4_ClusterInformation();
+
             // 6.4 清理测试文件
             System.out.println("6.4 清理测试文件");
             for (int i = 1; i <= 10; i++) {
@@ -562,7 +571,7 @@ public class FileSystemTestCases {
         testCase1_BasicDirectoryOperations();
         testCase2_BasicFileOperations();
         testCase3_FileWriteAndRead();
-        testCase4_ClusterInformation();
+        //testCase4_ClusterInformation();
         testCase5_ErrorHandling();
         testCase6_PerformanceTest();
         

@@ -20,6 +20,9 @@ public class DataService {
     private String selfIp;
     @Value("${server.port}")
     private int selfPort;
+    
+    @Autowired
+    private ZkService zkService;
 
     // 新增块大小常量（64MB）
     private static final int BLOCK_SIZE = 64 * 1024 * 1024; // 64MB
@@ -204,6 +207,11 @@ public class DataService {
             writeMd5ListToLocal(localMd5ListPath, md5ListBytes);
             System.out.println("[INFO] MD5清单文件已生成：" + localMd5ListPath);
 
+            // 更新ZK中的已使用容量
+            long totalDataSize = data.length + md5ListBytes.length;
+            zkService.addUsedCapacity(totalDataSize);
+            System.out.println("[INFO] 容量更新: +" + totalDataSize + " 字节");
+
             // 不再由 DataServer 自行进行三副本同步；由 MetaServer 负责调度多副本写入
             // 这里无论是否副本同步请求，均只写入本地
             if (isReplicaSync) {
@@ -283,6 +291,9 @@ public class DataService {
     public boolean deleteFileLocally(String path) {
         try {
             System.out.println("[INFO] 开始删除本地文件：" + path);
+            
+            // 计算要删除的文件总大小
+            long totalDeletedSize = calculateFileSize(path);
 
             // 删除分块文件
             boolean chunksDeleted = deleteChunkFiles(path);
@@ -291,6 +302,10 @@ public class DataService {
             boolean md5ListDeleted = deleteMd5ListFile(path);
             
             if (chunksDeleted && md5ListDeleted) {
+                // 更新ZK中的已使用容量
+                zkService.subtractUsedCapacity(totalDeletedSize);
+                System.out.println("[INFO] 容量更新: -" + totalDeletedSize + " 字节");
+                
                 System.out.println("[INFO] 本地文件删除成功：" + path);
                 return true;
             } else {
@@ -385,5 +400,39 @@ public class DataService {
         }
         // 目录为空或本身是文件，直接删除
         return dir.delete();
+    }
+
+    /**
+     * 计算文件大小（包括分块文件和MD5清单）
+     */
+    private long calculateFileSize(String path) {
+        long totalSize = 0;
+        try {
+            // 计算MD5清单文件大小
+            String md5ListPath = path + "_md5_list.txt";
+            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            File md5ListFile = new File(localMd5ListPath);
+            if (md5ListFile.exists()) {
+                totalSize += md5ListFile.length();
+            }
+
+            // 计算分块文件大小
+            int chunkIndex = 0;
+            while (true) {
+                String chunkPath = path + "_chunk_" + chunkIndex;
+                String localChunkPath = getLocalFilePath(chunkPath);
+                File chunkFile = new File(localChunkPath);
+                
+                if (!chunkFile.exists()) {
+                    break;
+                }
+                totalSize += chunkFile.length();
+                chunkIndex++;
+            }
+        } catch (Exception e) {
+            System.err.println("[ERROR] 计算文件大小失败：" + e.getMessage());
+            return 0;
+        }
+        return totalSize;
     }
 }

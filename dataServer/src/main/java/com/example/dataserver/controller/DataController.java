@@ -1,6 +1,7 @@
 package com.example.dataserver.controller;
 
 import com.example.dataserver.services.DataService;
+import com.example.dataserver.services.ZkService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -13,11 +14,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@RestController("/")
+@RestController
+@RequestMapping("/")
 public class DataController {
-
+    
     @Autowired
     private DataService dataService;
+    
+    @Autowired
+    private ZkService zkService;
 
     /**
      * 1、读取request content内容并保存在本地磁盘下的文件内

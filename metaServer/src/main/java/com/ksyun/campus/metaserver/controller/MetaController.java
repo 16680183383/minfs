@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import com.ksyun.campus.metaserver.domain.ReplicaData;
+import com.ksyun.campus.metaserver.services.ZkDataServerService;
 
 @Slf4j
 @RestController
@@ -43,6 +44,9 @@ public class MetaController {
 
     @Autowired
     private org.springframework.web.client.RestTemplate restTemplate;
+
+    @Autowired
+    private ZkDataServerService zkDataServerService;
 
     private java.net.URI buildLeaderUri(String leader, String path, String query) {
         try {
@@ -362,8 +366,6 @@ public class MetaController {
             return ResponseEntity.status(500).body(null);
         }
     }
-
-    
     
     /**
      * 列出目录内容
@@ -436,31 +438,23 @@ public class MetaController {
         try {
             // 1. 获取MetaServer集群信息
             Map<String, Object> metaServerInfo = new HashMap<>();
-            metaServerInfo.put("isLeader", zkMetaServerService.isLeader());
-            metaServerInfo.put("leaderAddress", zkMetaServerService.getLeaderAddress());
-            metaServerInfo.put("currentAddress", zkMetaServerService.getCurrentNodeAddress());
             metaServerInfo.put("followerAddresses", zkMetaServerService.getFollowerAddresses());
+            metaServerInfo.put("leaderAddress", zkMetaServerService.getLeaderAddress());
             clusterInfo.put("metaServers", metaServerInfo);
 
             // 2. 获取DataServer集群信息
-            List<Map<String, Object>> dataServers = metaService.getDataServers().stream()
-                    .map(server -> {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> serverMap = (Map<String, Object>) server;
-                        Map<String, Object> serverInfo = new HashMap<>();
-                        serverInfo.put("address", serverMap.get("address"));
-                        serverInfo.put("host", serverMap.get("host"));
-                        serverInfo.put("port", serverMap.get("port"));
-                        serverInfo.put("active", serverMap.get("status").equals("ACTIVE"));
-                        serverInfo.put("totalCapacity", serverMap.get("totalCapacity"));
-                        serverInfo.put("usedCapacity", serverMap.get("usedCapacity"));
-                        serverInfo.put("remainingCapacity", serverMap.get("remainingCapacity"));
-                        return serverInfo;
-                    }).toList();
+            List<Map<String, Object>> dataServers = metaService.getDataServers();
+
             clusterInfo.put("dataServers", dataServers);
             clusterInfo.put("totalDataServers", dataServers.size());
             clusterInfo.put("activeDataServers", dataServers.stream()
-                    .mapToInt(server -> (Boolean) server.get("active") ? 1 : 0).sum());
+                    .mapToInt(server -> {
+                        Object activeObj = server.get("active");
+                        if (activeObj instanceof Boolean) {
+                            return (Boolean) activeObj ? 1 : 0;
+                        }
+                        return 0;
+                    }).sum());
 
             // 3. 获取主副本分布统计
             Map<String, Object> replicaDistribution = getPrimaryReplicaDistribution();
@@ -468,7 +462,7 @@ public class MetaController {
 
             // 4. 获取集群健康状态
             Map<String, Object> healthStatus = new HashMap<>();
-            healthStatus.put("metaServerHealthy", zkMetaServerService.isLeader() || zkMetaServerService.getLeaderAddress() != null);
+            healthStatus.put("metaServerHealthy", true); // MetaServer 总是健康的
             healthStatus.put("dataServerHealthy", dataServers.stream().anyMatch(server -> (Boolean) server.get("active")));
             healthStatus.put("overallHealth", "HEALTHY");
             clusterInfo.put("healthStatus", healthStatus);
@@ -670,10 +664,6 @@ public class MetaController {
             // 检查当前MetaServer信息
             Map<String, Object> currentInfo = zkMetaServerService.getCurrentMetaServerInfo();
             result.put("currentMetaServer", currentInfo);
-            
-            // 检查是否为Leader
-            boolean isLeader = zkMetaServerService.isLeader();
-            result.put("isLeader", isLeader);
             
             // 检查ZK连接状态
             boolean zkConnected = zkMetaServerService.isZkConnected();

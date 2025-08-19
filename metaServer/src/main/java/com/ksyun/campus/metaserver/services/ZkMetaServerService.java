@@ -245,7 +245,6 @@ public class ZkMetaServerService implements ApplicationRunner {
         info.put("host", serverHost);
         info.put("port", serverPort);
         info.put("path", metaServerPath);
-        info.put("isLeader", isLeader.get());
         info.put("zkConnected", zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED);
         return info;
     }
@@ -275,6 +274,39 @@ public class ZkMetaServerService implements ApplicationRunner {
             log.warn("获取Leader地址失败", e);
         }
         return null;
+    }
+    
+    /**
+     * 获取所有Follower地址列表
+     */
+    public List<String> getFollowerAddresses() {
+        List<String> followerAddresses = new ArrayList<>();
+        try {
+            String leaderAddress = getLeaderAddress();
+            if (leaderAddress == null) {
+                return followerAddresses;
+            }
+            
+            // 获取所有MetaServer节点
+            List<Map<String, Object>> allMetaServers = getAllMetaServers();
+            for (Map<String, Object> server : allMetaServers) {
+                String address = (String) server.get("address");
+                if (address != null && !address.equals(leaderAddress)) {
+                    followerAddresses.add(address);
+                }
+            }
+            log.debug("获取到 {} 个Follower地址: {}", followerAddresses.size(), followerAddresses);
+        } catch (Exception e) {
+            log.warn("获取Follower地址列表失败", e);
+        }
+        return followerAddresses;
+    }
+    
+    /**
+     * 获取当前节点地址
+     */
+    public String getCurrentNodeAddress() {
+        return serverHost + ":" + serverPort;
     }
     
     /**
