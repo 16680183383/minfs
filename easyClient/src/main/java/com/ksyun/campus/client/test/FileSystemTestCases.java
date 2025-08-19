@@ -6,6 +6,7 @@ import com.ksyun.campus.client.FSOutputStream;
 import com.ksyun.campus.client.domain.StatInfo;
 import com.ksyun.campus.client.domain.ClusterInfo;
 
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 
@@ -162,107 +163,124 @@ public class FileSystemTestCases {
         
         System.out.println("=== 测试用例2完成 ===\n");
     }
-    
+
+
     /**
      * 测试用例3: 文件写入和读取
      * 测试大文件写入、分块读取等功能
      */
     public void testCase3_FileWriteAndRead() {
         System.out.println("=== 测试用例3: 文件写入和读取 ===");
-        
+
         try {
             // 3.1 创建目录
             System.out.println("3.1 创建测试目录");
-            fileSystem.mkdir("/test_write_read");
-            
-            // 3.2 创建大文件
-            System.out.println("3.2 创建大文件 /test_write_read/bigfile.txt");
-            FSOutputStream outputStream = fileSystem.create("/test_write_read/bigfile.txt");
-            if (outputStream != null) {
-                // 写入多行内容
-                StringBuilder content = new StringBuilder();
-                for (int i = 1; i <= 100; i++) {
-                    content.append("第").append(i).append("行: 这是测试内容，包含数字").append(i).append("\n");
-                }
-                
-                byte[] data = content.toString().getBytes("UTF-8");
-                outputStream.write(data);
-                outputStream.close();
-                System.out.println("   文件创建成功，内容长度: " + data.length + " 字节");
-            }
-            
-            // 3.3 分块读取文件
-            System.out.println("3.3 分块读取文件");
-            FSInputStream inputStream = fileSystem.open("/test_write_read/bigfile.txt");
-            if (inputStream != null) {
-                byte[] buffer = new byte[256]; // 每次读取256字节
-                int totalRead = 0;
-                int chunkCount = 0;
-                
-                while (true) {
-                    int bytesRead = inputStream.read(buffer);
-                    if (bytesRead <= 0) break;
-                    
-                    chunkCount++;
-                    totalRead += bytesRead;
-                    
-                    if (chunkCount <= 3) { // 只显示前3块内容
-                        String chunk = new String(buffer, 0, bytesRead, "UTF-8");
-                        System.out.println("   第" + chunkCount + "块 (" + bytesRead + "字节): " + chunk.substring(0, Math.min(50, chunk.length())) + "...");
-                    }
-                }
-                
-                System.out.println("   总共读取: " + totalRead + " 字节，分 " + chunkCount + " 块");
-                inputStream.close();
+            final String testDir = "/test_write_read";
+            fileSystem.mkdir(testDir);
+
+            // 3.2 写入100M、10M、512K文件（通过SDK），流式计算写入MD5
+            System.out.println("3.2 写入指定大小文件并计算MD5");
+            final long KB = 1024L;
+            final long MB = 1024L * KB;
+
+            String f100m = testDir + "/bigfile_100M.bin";
+            String f10m = testDir + "/bigfile_10M.bin";
+            String f512k = testDir + "/bigfile_512k.bin";
+
+            String md5Write100m = writeFileWithMd5(f100m, 100L * MB);
+            String md5Write10m = writeFileWithMd5(f10m, 10L * MB);
+            String md5Write512k = writeFileWithMd5(f512k, 512L * KB);
+
+            // 3.3 读取并计算MD5，校验一致
+            System.out.println("3.3 读取并校验MD5");
+            String md5Read100m = readFileMd5(f100m);
+            String md5Read10m = readFileMd5(f10m);
+            String md5Read512k = readFileMd5(f512k);
+
+            System.out.println("   100M 写入MD5=" + md5Write100m + ", 读取MD5=" + md5Read100m + ", 一致=" + md5Write100m.equals(md5Read100m));
+            System.out.println("   10M  写入MD5=" + md5Write10m + ", 读取MD5=" + md5Read10m + ", 一致=" + md5Write10m.equals(md5Read10m));
+            System.out.println("   512K 写入MD5=" + md5Write512k + ", 读取MD5=" + md5Read512k + ", 一致=" + md5Write512k.equals(md5Read512k));
+
+            if (!md5Write100m.equals(md5Read100m) || !md5Write10m.equals(md5Read10m) || !md5Write512k.equals(md5Read512k)) {
+                throw new RuntimeException("MD5校验失败：写入与读取内容不一致");
             }
 
-            testCase4_ClusterInformation();
-
-            // 3.4 清理测试文件
-            System.out.println("3.4 清理测试文件");
-            System.out.println("   [开始] 删除文件 /test_write_read/bigfile.txt");
-            boolean deleteFile = fileSystem.delete("/test_write_read/bigfile.txt");
-            System.out.println("   [结束] 删除文件结果: " + deleteFile);
-            
-            // 验证文件删除后元数据也被清理
-            System.out.println("   [验证] 检查删除后的文件状态");
-            try {
-                StatInfo deletedFileStats = fileSystem.getFileStats("/test_write_read/bigfile.txt");
-                if (deletedFileStats == null) {
-                    System.out.println("   [成功] 文件元数据已正确删除");
-                } else {
-                    System.out.println("   [警告] 文件元数据仍然存在: " + deletedFileStats.getPath());
-                }
-            } catch (Exception e) {
-                System.out.println("   [成功] 文件元数据访问失败，说明已删除: " + e.getMessage());
-            }
-            
-            System.out.println("   [开始] 删除目录 /test_write_read");
-            boolean deleteDir = fileSystem.delete("/test_write_read");
-            System.out.println("   [结束] 删除目录结果: " + deleteDir);
-
-            // 验证目录删除后元数据也被清理
-            System.out.println("   [验证] 检查删除后的目录状态");
-            try {
-                List<StatInfo> deletedDirStats = fileSystem.listFileStats("/test_write_read");
-                if (deletedDirStats == null) {
-                    System.out.println("   [成功] 目录元数据已正确删除");
-                } else {
-                    System.out.println("   [警告] 目录元数据仍然存在，包含 " + deletedDirStats.size() + " 个子项");
-                }
-            } catch (Exception e) {
-                System.out.println("   [成功] 目录元数据访问失败，说明已删除: " + e.getMessage());
-            }
-
-            System.out.println("   删除文件: " + deleteFile + ", 删除目录: " + deleteDir);
+            // 3.4 不进行清理，保留文件以便在本地磁盘查看
+            System.out.println("3.4 保留已写入文件，不进行清理。请在DataServer本地磁盘查看数据。");
         } catch (Exception e) {
             System.err.println("测试用例3执行失败: " + e.getMessage());
             e.printStackTrace();
         }
-        
+
         System.out.println("=== 测试用例3完成 ===\n");
     }
-    
+
+    // 构造稳定ASCII模式的缓冲，避免字符编码造成的差异
+    private byte[] buildAsciiPatternBuffer(int size) {
+        byte[] buf = new byte[size];
+        for (int i = 0; i < size; i++) {
+            // 仅使用'A'..'Z'字符，确保经由字符串/UTF-8通道也不变
+            buf[i] = (byte) ('A' + (i % 26));
+        }
+        return buf;
+    }
+
+    // 转16进制小写字符串
+    private String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            int v = b & 0xFF;
+            if (v < 16) sb.append('0');
+            sb.append(Integer.toHexString(v));
+        }
+        return sb.toString();
+    }
+
+    // 通过SDK写入指定大小文件，同时计算写入数据的MD5
+    private String writeFileWithMd5(String path, long totalBytes) throws Exception {
+        System.out.println("   [写入] " + path + " -> " + totalBytes + " 字节");
+        FSOutputStream out = fileSystem.create(path);
+        if (out == null) {
+            throw new IllegalStateException("无法创建输出流: " + path);
+        }
+        MessageDigest md5 = MessageDigest.getInstance("MD5");
+        final int bufferSize = 256 * 1024; // 256KB
+        byte[] pattern = buildAsciiPatternBuffer(bufferSize);
+        long remaining = totalBytes;
+        while (remaining > 0) {
+            int chunk = (int) Math.min(pattern.length, remaining);
+            out.write(pattern, 0, chunk);
+            md5.update(pattern, 0, chunk);
+            remaining -= chunk;
+        }
+        out.close();
+        String hex = toHex(md5.digest());
+        System.out.println("   [完成] 写入MD5=" + hex);
+        return hex;
+    }
+
+    // 通过SDK完整读取文件，计算读取内容的MD5
+    private String readFileMd5(String path) throws Exception {
+        System.out.println("   [读取] " + path);
+        FSInputStream in = fileSystem.open(path);
+        if (in == null) {
+            throw new IllegalStateException("无法打开输入流: " + path);
+        }
+        MessageDigest md5 = MessageDigest.getInstance("MD5");
+        byte[] buffer = new byte[256 * 1024];
+        long total = 0L;
+        while (true) {
+            int n = in.read(buffer);
+            if (n <= 0) break;
+            md5.update(buffer, 0, n);
+            total += n;
+        }
+        in.close();
+        String hex = toHex(md5.digest());
+        System.out.println("   [完成] 读取共=" + total + " 字节, MD5=" + hex);
+        return hex;
+    }
+
     /**
      * 测试用例4: 集群信息获取
      * 测试获取集群状态、DataServer信息等

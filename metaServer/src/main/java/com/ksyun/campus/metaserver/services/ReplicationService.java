@@ -104,9 +104,7 @@ public class ReplicationService {
 			}
 			List<Map<String, Object>> metas = zkMetaServerService.getAllMetaServers();
 			Map<String, Object> selfInfo = zkMetaServerService.getCurrentMetaServerInfo();
-			String self = (selfInfo.get("host") != null && selfInfo.get("port") != null)
-					? selfInfo.get("host") + ":" + selfInfo.get("port")
-					: String.valueOf(selfInfo.get("address"));
+			String self = selfInfo.get("host") + ":" + selfInfo.get("port");
 			List<String> followers = metas.stream()
 					.filter(m -> !self.equals(String.valueOf(m.get("address"))))
 					.map(m -> String.valueOf(m.get("address")))

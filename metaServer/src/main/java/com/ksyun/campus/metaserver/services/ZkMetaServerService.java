@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -135,7 +134,6 @@ public class ZkMetaServerService implements ApplicationRunner {
     
     private void tryBecomeLeader() {
         try {
-            // 修复: 使用固定的leader节点名称，而不是每个MetaServer都有自己的leader节点
             String leaderNodePath = leaderPath + "/leader";
             String leaderData = serverHost + ":" + serverPort + ":" + System.currentTimeMillis();
             
