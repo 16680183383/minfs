@@ -182,6 +182,25 @@ public class FsController {
         return r;
     }
 
+    /**
+     * 获取指定文件系统统计信息
+     */
+    @GetMapping("/fs/stats")
+    public Map<String, Object> fsStats(@RequestHeader(value = "fileSystemName", required = false) String fileSystemName) throws IOException {
+        EFileSystem fs = getFileSystem(fileSystemName);
+        return fs.getFileSystemStats();
+    }
+
+    /**
+     * 获取全局统计信息（所有文件系统聚合）
+     */
+    @GetMapping("/fs/global-stats")
+    public Map<String, Object> fsGlobalStats() throws IOException {
+        // 全局统计无需指定 fileSystemName
+        EFileSystem fs = getFileSystem(null);
+        return fs.getGlobalStats();
+    }
+
     @PostMapping("/fsck")
     public Map<String, Object> triggerFsck(@RequestHeader(value = "fileSystemName", required = false) String fileSystemName) {
         Map<String, Object> r = new HashMap<>();

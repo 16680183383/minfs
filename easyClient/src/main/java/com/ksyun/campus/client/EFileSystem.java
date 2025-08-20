@@ -506,9 +506,11 @@ public class EFileSystem extends FileSystem {
             String response = HttpClientUtil.doGetWithHeader(httpClient, url, "fileSystemName", defaultFileSystemName);
             
             if (response != null && !response.contains("error")) {
-                // 简化处理，返回空Map，实际应该从响应中解析
-                System.out.println("成功获取文件系统统计信息: fileSystemName=" + defaultFileSystemName);
-                return new java.util.HashMap<>();
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> stats = mapper.readValue(response, java.util.Map.class);
+                System.out.println("成功获取文件系统统计信息: fileSystemName=" + defaultFileSystemName + ", totalFiles=" + stats.get("totalFiles"));
+                return stats;
             } else {
                 throw new IOException("获取文件系统统计信息失败, 响应: " + response);
             }
@@ -533,9 +535,11 @@ public class EFileSystem extends FileSystem {
             String response = HttpClientUtil.doGetWithHeader(httpClient, url, "fileSystemName", defaultFileSystemName);
             
             if (response != null && !response.contains("error")) {
-                // 简化处理，返回空Map，实际应该从响应中解析
-                System.out.println("成功获取全局统计信息: fileSystemName=" + defaultFileSystemName);
-                return new java.util.HashMap<>();
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> stats = mapper.readValue(response, java.util.Map.class);
+                System.out.println("成功获取全局统计信息: totalFiles=" + stats.get("totalFiles"));
+                return stats;
             } else {
                 throw new IOException("获取全局统计信息失败, 响应: " + response);
             }

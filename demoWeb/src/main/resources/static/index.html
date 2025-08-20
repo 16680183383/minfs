@@ -106,9 +106,10 @@
       clearAllOutputs();
     }
     
-    function listFileSystems() {
-      // 这里可以调用后端API获取所有文件系统列表
-      showToast('功能开发中：列出所有文件系统');
+    async function listFileSystems() {
+      const r = await api('/api/fs/filesystems');
+      setJson('clusterOut', r);
+      showToast('已获取文件系统列表');
     }
     
     function clearAllOutputs() {
@@ -298,25 +299,13 @@
     async function getFileSystemStats() {
       try {
         setJson('fsStatsOut', '正在获取文件系统统计信息...');
-        
-        // 这里可以调用后端API获取文件系统统计
-        // 暂时使用模拟数据
-        const stats = {
-          fileSystemName: currentFileSystem,
-          fileCount: Math.floor(Math.random() * 100),
-          dirCount: Math.floor(Math.random() * 50),
-          totalSize: Math.floor(Math.random() * 1024 * 1024 * 100) // 随机大小
-        };
-        
-        // 更新UI
-        $('fsStatsName').textContent = stats.fileSystemName;
-        $('fsStatsFiles').textContent = stats.fileCount;
-        $('fsStatsDirs').textContent = stats.dirCount;
-        $('fsStatsSize').textContent = formatBytes(stats.totalSize);
-        
-        setJson('fsStatsOut', JSON.stringify(stats, null, 2));
+        const stats = await api('/api/fs/fs/stats', { headers: { 'fileSystemName': currentFileSystem }});
+        $('fsStatsName').textContent = stats.fileSystemName || currentFileSystem;
+        $('fsStatsFiles').textContent = (stats.totalRegularFiles ?? stats.totalFiles ?? 0);
+        $('fsStatsDirs').textContent = (stats.totalDirectories ?? 0);
+        $('fsStatsSize').textContent = formatBytes(stats.totalSize ?? 0);
+        setJson('fsStatsOut', stats);
         showToast(`已获取文件系统 ${currentFileSystem} 的统计信息`);
-        
       } catch (error) {
         setJson('fsStatsOut', `获取文件系统统计失败: ${error.message}`);
         showToast('获取文件系统统计失败', false);
@@ -327,24 +316,12 @@
     async function getGlobalStats() {
       try {
         setJson('globalStatsOut', '正在获取全局统计信息...');
-        
-        // 这里可以调用后端API获取全局统计
-        // 暂时使用模拟数据
-        const globalStats = {
-          totalFileSystems: Math.floor(Math.random() * 10) + 1,
-          totalFiles: Math.floor(Math.random() * 1000),
-          totalDirectories: Math.floor(Math.random() * 500),
-          timestamp: new Date().toISOString()
-        };
-        
-        // 更新UI
-        $('globalFsCount').textContent = globalStats.totalFileSystems;
-        $('globalTotalFiles').textContent = globalStats.totalFiles;
-        $('globalTotalDirs').textContent = globalStats.totalDirectories;
-        
-        setJson('globalStatsOut', JSON.stringify(globalStats, null, 2));
+        const stats = await api('/api/fs/fs/global-stats');
+        $('globalFsCount').textContent = (stats.totalFileSystems ?? '-');
+        $('globalTotalFiles').textContent = (stats.totalRegularFiles ?? stats.totalFiles ?? 0);
+        $('globalTotalDirs').textContent = (stats.totalDirectories ?? 0);
+        setJson('globalStatsOut', stats);
         showToast('已获取全局统计信息');
-        
       } catch (error) {
         setJson('globalStatsOut', `获取全局统计失败: ${error.message}`);
         showToast('获取全局统计失败', false);
