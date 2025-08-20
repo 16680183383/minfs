@@ -29,10 +29,13 @@ public class ZkService {
     @Value("${dataserver.storage.path:D:/data/apps/minfs/dataserver}")
     private String storagePath;
     
+    @Value("${dataserver.total-capacity:4096}")
+    private long configTotalCapacity;
+    
     private ZooKeeper zooKeeper;
     private String dataServerNodePath;
     private final AtomicLong usedCapacity = new AtomicLong(0);
-    private final AtomicLong totalCapacity = new AtomicLong(1024 * 1024 * 1024L); // 1GB 默认容量
+    private final AtomicLong totalCapacity = new AtomicLong(4 * 1024 * 1024 * 1024L); // 4GB 默认容量
     private final AtomicLong fileTotal = new AtomicLong(0);
     
     @PostConstruct
@@ -121,9 +124,10 @@ public class ZkService {
                     log.info("创建存储目录: {}", storagePath);
                 }
                 // 使用配置文件中的容量值，如果没有则使用默认值
-                long configCapacity = 1024 * 1024 * 1024L; // 1GB 默认值
+                // 配置文件中的值以MB为单位，转换为字节
+                long configCapacity = configTotalCapacity * 1024 * 1024L; // 转换为字节
                 totalCapacity.set(configCapacity);
-                log.info("使用配置存储容量: {} 字节", configCapacity);
+                log.info("使用配置存储容量: {} MB ({} 字节)", configTotalCapacity, configCapacity);
             }
             
             // 计算当前已使用的容量
@@ -138,7 +142,7 @@ public class ZkService {
             
         } catch (Exception e) {
             log.warn("计算存储容量失败，使用默认值", e);
-            totalCapacity.set(1024 * 1024 * 1024L); // 1GB
+            totalCapacity.set(4 * 1024 * 1024 * 1024L); // 4GB
             usedCapacity.set(0L);
             fileTotal.set(0L);
         }

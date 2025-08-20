@@ -10,6 +10,7 @@
     <module>metaServer</module>
     <module>dataServer</module>
     <module>easyClient</module>
+    <module>demoWeb</module>
   </modules>
   <parent>
     <groupId>org.springframework.boot</groupId>
