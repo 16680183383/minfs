@@ -205,8 +205,12 @@ public class FileSystemTestCases {
                 throw new RuntimeException("MD5校验失败：写入与读取内容不一致");
             }
 
-            // 3.4 不进行清理，保留文件以便在本地磁盘查看
-            System.out.println("3.4 保留已写入文件，不进行清理。请在DataServer本地磁盘查看数据。");
+            // 3.4 清理测试数据
+            System.out.println("3.4 清理测试数据");
+            try { fileSystem.delete(f100m); } catch (Exception ignore) {}
+            try { fileSystem.delete(f10m); } catch (Exception ignore) {}
+            try { fileSystem.delete(f512k); } catch (Exception ignore) {}
+            try { fileSystem.delete(testDir); } catch (Exception ignore) {}
         } catch (Exception e) {
             System.err.println("测试用例3执行失败: " + e.getMessage());
             e.printStackTrace();
@@ -459,6 +463,14 @@ public class FileSystemTestCases {
                 System.out.println("   写入null数据失败: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }
             
+            // 结束清理：删除可能存在的测试资源
+            try { fileSystem.delete("/test_file_path"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_file_path/"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_dir_path"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_dir_path/"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_empty_data.txt"); } catch (Exception ignore) {}
+            try { fileSystem.delete("/test_null_data.txt"); } catch (Exception ignore) {}
+
         } catch (Exception e) {
             System.err.println("测试用例5执行失败: " + e.getMessage());
             e.printStackTrace();
@@ -712,9 +724,9 @@ public class FileSystemTestCases {
                 System.out.println("   [成功] 未分配节点未发现历史脏副本");
             }
 
-//            System.out.println("8.8 清理测试数据");
-//            try { fileSystem.delete(path); } catch (Exception ignore) {}
-//            try { fileSystem.delete(dir); } catch (Exception ignore) {}
+            System.out.println("8.8 清理测试数据");
+            try { fileSystem.delete(path); } catch (Exception ignore) {}
+            try { fileSystem.delete(dir); } catch (Exception ignore) {}
         } catch (Exception e) {
             System.err.println("测试用例8执行失败: " + e.getMessage());
             e.printStackTrace();
