@@ -107,9 +107,18 @@
     }
     
     async function listFileSystems() {
+      const el = $('fsListOut');
       const r = await api('/api/fs/filesystems');
-      setJson('clusterOut', r);
+      setJson('fsListOut', r);
+      el.style.display = 'block';
       showToast('已获取文件系统列表');
+    }
+
+    function hideFileSystems(){
+      const el = $('fsListOut');
+      el.textContent = '';
+      el.style.display = 'none';
+      showToast('已关闭文件系统显示');
     }
     
     function clearAllOutputs() {
@@ -550,12 +559,14 @@
         <button onclick="switchFileSystem()" class="btn-brand">切换文件系统</button>
         <button onclick="createFileSystem()" class="btn-brand">创建新文件系统</button>
         <button onclick="listFileSystems()" class="btn-brand">列出所有文件系统</button>
+        <button onclick="hideFileSystems()" class="btn-danger">关闭文件系统显示</button>
       </div>
       <div class="fs-info">
         <span class="fs-label">当前文件系统: </span>
         <span id="currentFs" class="fs-current">demo</span>
         <span class="fs-status" id="fsStatus">✓ 已连接</span>
       </div>
+      <pre id="fsListOut" style="margin-top:8px; display:none"></pre>
     </div>
   </header>
   <main>

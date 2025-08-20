@@ -29,13 +29,13 @@ public class ZkService {
     @Value("${dataserver.storage.path:D:/data/apps/minfs/dataserver}")
     private String storagePath;
     
-    @Value("${dataserver.total-capacity:4096}")
+    @Value("${dataserver.total-capacity:2048}")
     private long configTotalCapacity;
     
     private ZooKeeper zooKeeper;
     private String dataServerNodePath;
     private final AtomicLong usedCapacity = new AtomicLong(0);
-    private final AtomicLong totalCapacity = new AtomicLong(4 * 1024 * 1024 * 1024L); // 4GB 默认容量
+    private final AtomicLong totalCapacity = new AtomicLong(2 * 1024 * 1024 * 1024L); // 2GB 默认容量
     private final AtomicLong fileTotal = new AtomicLong(0);
     
     @PostConstruct
@@ -113,23 +113,16 @@ public class ZkService {
     private void calculateTotalCapacity() {
         try {
             java.io.File storageDir = new java.io.File(storagePath);
-            if (storageDir.exists() && storageDir.isDirectory()) {
-                // 使用总空间作为总容量
-                long totalSpace = storageDir.getTotalSpace();
-                totalCapacity.set(totalSpace);
-                log.info("计算存储容量: 总容量={} 字节", totalSpace);
-            } else {
-                // 如果目录不存在，创建目录并设置默认容量
+            if (!storageDir.exists()) {
                 if (storageDir.mkdirs()) {
                     log.info("创建存储目录: {}", storagePath);
                 }
-                // 使用配置文件中的容量值，如果没有则使用默认值
-                // 配置文件中的值以MB为单位，转换为字节
-                long configCapacity = configTotalCapacity * 1024 * 1024L; // 转换为字节
-                totalCapacity.set(configCapacity);
-                log.info("使用配置存储容量: {} MB ({} 字节)", configTotalCapacity, configCapacity);
             }
-            
+            // 使用配置容量（单位MB），忽略磁盘实际总空间，统一对外汇报固定容量
+            long configuredBytes = configTotalCapacity * 1024 * 1024L;
+            totalCapacity.set(configuredBytes);
+            log.info("使用配置存储容量: {} MB ({} 字节)", configTotalCapacity, configuredBytes);
+
             // 计算当前已使用的容量
             long currentUsedCapacity = calculateCurrentUsedCapacity();
             usedCapacity.set(currentUsedCapacity);
@@ -142,7 +135,7 @@ public class ZkService {
             
         } catch (Exception e) {
             log.warn("计算存储容量失败，使用默认值", e);
-            totalCapacity.set(4 * 1024 * 1024 * 1024L); // 4GB
+            totalCapacity.set(2 * 1024 * 1024 * 1024L); // 2GB 回退
             usedCapacity.set(0L);
             fileTotal.set(0L);
         }

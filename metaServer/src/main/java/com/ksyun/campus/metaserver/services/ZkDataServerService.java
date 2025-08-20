@@ -286,13 +286,13 @@ public class ZkDataServerService {
                     server.put("port", 0);
                 }
                 server.put("address", serverId);
-                long defaultCapacity = 1024 * 1024 * 1024L; // 1GB
+                long defaultCapacity = 2L * 1024 * 1024 * 1024; // 2GB
                 server.put("totalCapacity", defaultCapacity);
                 server.put("usedCapacity", 0L);
                 server.put("remainingCapacity", defaultCapacity);
             } else {
                 server.put("address", serverId);
-                long defaultCapacity = 1024 * 1024 * 1024L; // 1GB
+                long defaultCapacity = 2L * 1024 * 1024 * 1024; // 2GB
                 server.put("totalCapacity", defaultCapacity);
                 server.put("usedCapacity", 0L);
                 server.put("remainingCapacity", defaultCapacity);
@@ -317,7 +317,7 @@ public class ZkDataServerService {
         }
         
         if (!server.containsKey("totalCapacity")) {
-            server.put("totalCapacity", 1024 * 1024 * 1024L);
+            server.put("totalCapacity", 2L * 1024 * 1024 * 1024);
         }
         if (!server.containsKey("usedCapacity")) {
             server.put("usedCapacity", 0L);
@@ -351,12 +351,12 @@ public class ZkDataServerService {
                 server.put("port", 0);
             }
             server.put("address", parts[0] + ":" + parts[1]);
-            long capacity = 1024 * 1024 * 1024L; // 1GB 默认值
+            long capacity = 2L * 1024 * 1024 * 1024; // 2GB 默认值
             if (parts.length >= 3) {
                 try {
                     capacity = Long.parseLong(parts[2]);
                 } catch (NumberFormatException e) {
-                    capacity = 1024 * 1024 * 1024L;
+                    capacity = 2L * 1024 * 1024 * 1024;
                 }
             }
             server.put("totalCapacity", capacity);
