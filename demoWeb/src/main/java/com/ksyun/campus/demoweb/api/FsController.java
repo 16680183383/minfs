@@ -134,15 +134,18 @@ public class FsController {
     @GetMapping("/filesystems")
     public List<String> listFileSystems(@RequestHeader(value = "fileSystemName", required = false) String fileSystemName) throws IOException {
         EFileSystem fs = getFileSystem(fileSystemName);
-        // 直接请求 MetaServer 的 /filesystems
         String leader = fs.getMetaServerAddress();
         String url = "http://" + leader + "/filesystems";
-        String resp = com.ksyun.campus.client.util.HttpClientUtil.doGet(fs.getHttpClient(), url);
-        if (resp == null || resp.contains("error")) {
-            return java.util.Collections.emptyList();
+        try {
+            String resp = com.ksyun.campus.client.util.HttpClientUtil.doGet(fs.getHttpClient(), url);
+            if (resp == null || resp.contains("error")) {
+                return java.util.Collections.emptyList();
+            }
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            return mapper.readValue(resp, new com.fasterxml.jackson.core.type.TypeReference<List<String>>(){});
+        } catch (org.apache.hc.core5.http.ParseException e) {
+            throw new IOException("解析响应失败", e);
         }
-        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-        return mapper.readValue(resp, new com.fasterxml.jackson.core.type.TypeReference<List<String>>(){});
     }
 
     @PostMapping("/testWriteRead")
