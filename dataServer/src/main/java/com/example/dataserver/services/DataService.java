@@ -8,13 +8,14 @@ import org.springframework.stereotype.Service;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class DataService {
 
-    @Value("${dataserver.storage.path}")
+    @Value("${dataserver.storage.path:D:/data/apps/minfs/dataserver}")
     private String localStoragePath; // 本地存储根目录（如/data/dataserver/storage）
     @Value("${dataserver.ip}")
     private String selfIp;
@@ -28,37 +29,38 @@ public class DataService {
     private static final int BLOCK_SIZE = 64 * 1024 * 1024; // 64MB
 
     /**
-     * 生成本地存储路径（基于文件路径映射）
+     * 生成本地存储路径（基于文件系统名称和文件路径映射）
      */
-    public String getLocalFilePath(String path) {
+    public String getLocalFilePath(String fileSystemName, String path) {
         try {
             // 先进行URL解码，处理MetaServer发送的编码路径
             String decodedPath = java.net.URLDecoder.decode(path, java.nio.charset.StandardCharsets.UTF_8.name());
-            System.out.println("[DEBUG] getLocalFilePath 原始路径: '" + path + "'");
-            System.out.println("[DEBUG] getLocalFilePath 解码后路径: '" + decodedPath + "'");
+            System.out.println("[DEBUG] getLocalFilePath 文件系统: " + fileSystemName + ", 原始路径: '" + path + "'");
+            System.out.println("[DEBUG] getLocalFilePath 文件系统: " + fileSystemName + ", 解码后路径: '" + decodedPath + "'");
             
-            // 例如：path为"/test/file.txt"，映射为localStoragePath/test/file.txt
-            String localPath = localStoragePath + decodedPath.replace("/", File.separator);
-            System.out.println("[DEBUG] getLocalFilePath 最终本地路径: '" + localPath + "'");
+            // 例如：fileSystemName为"fs1"，path为"/test/file.txt"，映射为localStoragePath/fs1/test/file.txt
+            String localPath = localStoragePath + File.separator + fileSystemName + decodedPath.replace("/", File.separator);
+            System.out.println("[DEBUG] getLocalFilePath 文件系统: " + fileSystemName + ", 最终本地路径: '" + localPath + "'");
             return localPath;
         } catch (Exception e) {
-            System.err.println("[ERROR] getLocalFilePath URL解码失败: " + path + ", 错误: " + e.getMessage());
+            System.err.println("[ERROR] getLocalFilePath URL解码失败: fileSystemName=" + fileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
             // 如果解码失败，使用原始路径
-            return localStoragePath + path.replace("/", File.separator);
+            return localStoragePath + File.separator + fileSystemName + path.replace("/", File.separator);
         }
     }
 
     /**
      * 分块读取文件内容
+     * @param fileSystemName 文件系统名称
      * @param path 文件路径
      * @param offset 偏移量（字节）
      * @param length 读取长度（字节），-1表示读取到文件末尾
      */
-    public byte[] readWithChunk(String path, int offset, int length) {
+    public byte[] readWithChunk(String fileSystemName, String path, int offset, int length) {
         try {
             // 1. 读取本地MD5清单文件（替代从metaServer获取）
             String md5ListPath = path + "_md5_list.txt";
-            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            String localMd5ListPath = getLocalFilePath(fileSystemName, md5ListPath);
             List<String> expectedChunkMd5 = readMd5ListFromLocal(localMd5ListPath);
             if (expectedChunkMd5.isEmpty()) {
                 throw new RuntimeException("MD5清单文件为空：" + localMd5ListPath);
@@ -68,7 +70,7 @@ public class DataService {
             List<File> chunkFiles = new ArrayList<>();
             for (int i = 0; i < expectedChunkMd5.size(); i++) {
                 String chunkPath = path + "_chunk_" + i;
-                File chunkFile = new File(getLocalFilePath(chunkPath));
+                File chunkFile = new File(getLocalFilePath(fileSystemName, chunkPath));
                 if (!chunkFile.exists()) {
                     throw new RuntimeException("块文件不存在：" + chunkPath);
                 }
@@ -110,12 +112,12 @@ public class DataService {
             }
 
             byte[] fullData = bos.toByteArray();
-            System.out.println("[INFO] 文件" + path + "读取完成，MD5校验通过，总大小：" + fullData.length + "字节");
+            System.out.println("[INFO] 文件系统: " + fileSystemName + ", 文件" + path + "读取完成，MD5校验通过，总大小：" + fullData.length + "字节");
             
             // 处理分块读取
             if (offset > 0 || length > 0) {
                 if (offset >= fullData.length) {
-                    System.out.println("[WARN] 偏移量超出文件大小: offset=" + offset + ", fileSize=" + fullData.length);
+                    System.out.println("[WARN] 偏移量超出文件大小: fileSystemName=" + fileSystemName + ", path=" + path + ", offset=" + offset + ", fileSize=" + fullData.length);
                     return new byte[0];
                 }
                 
@@ -126,15 +128,14 @@ public class DataService {
                 byte[] result = new byte[resultLength];
                 System.arraycopy(fullData, offset, result, 0, resultLength);
                 
-                System.out.println("[INFO] 分块读取成功: path=" + path + ", offset=" + offset + 
-                                 ", length=" + actualLength + ", actualLength=" + resultLength);
+                System.out.println("[INFO] 分块读取成功: fileSystemName=" + fileSystemName + ", path=" + path + ", offset=" + offset + ", length=" + length + ", actualLength=" + resultLength);
                 return result;
             }
             
             return fullData;
         } catch (Exception e) {
-            System.err.println("[ERROR] 分块读取失败：" + e.getMessage());
-            throw new RuntimeException("Read with chunk failed", e);
+            System.err.println("[ERROR] 读取文件失败: fileSystemName=" + fileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new RuntimeException("读取文件失败: " + e.getMessage(), e);
         }
     }
 
@@ -159,231 +160,199 @@ public class DataService {
     }
 
     /**
-     * 分块写入文件并返回三副本位置（符合controller返回值要求）
-     * @param data 待写入的二进制数据
+     * 分块写入文件内容
+     * @param fileSystemName 文件系统名称
+     * @param data 要写入的数据
      * @param path 文件路径
-     * @return 三副本位置列表（格式：ip:port）
+     * @param isReplicaSync 是否为副本同步请求
+     * @return 副本位置列表
      */
-    public List<String> writeWithChunk(byte[] data, String path, boolean isReplicaSync) {
+    public List<String> writeWithChunk(String fileSystemName, byte[] data, String path, boolean isReplicaSync) {
         try {
             List<String> replicaLocations = new ArrayList<>();
             replicaLocations.add(selfIp + ":" + selfPort); // 本节点始终作为副本之一
-            System.out.println("[INFO] 分块写入开始，目标路径：" + path + "，本节点：" + selfIp + ":" + selfPort + "，是否为副本同步请求：" + isReplicaSync);
 
-            // 新增：存储每个块的MD5（用于后续校验）
-            List<String> chunkMd5List = new ArrayList<>();
+            System.out.println("[INFO] 分块写入开始，文件系统: " + fileSystemName + ", 目标路径：" + path + "，本节点：" + selfIp + ":" + selfPort + "，是否为副本同步请求：" + isReplicaSync);
 
-            // 分块处理（无论请求类型，都需写入本地）
+            // 1. 数据分块
             int totalChunks = (int) Math.ceil((double) data.length / BLOCK_SIZE);
             System.out.println("[INFO] 数据分块：" + totalChunks + "块，块大小：" + BLOCK_SIZE + "字节");
 
+            List<String> chunkMd5List = new ArrayList<>();
+            
+            // 2. 写入本地分块文件
             for (int i = 0; i < totalChunks; i++) {
-                int offset = i * BLOCK_SIZE;
-                int length = Math.min(BLOCK_SIZE, data.length - offset);
-                byte[] chunk = new byte[length];
-                System.arraycopy(data, offset, chunk, 0, length);
+                int start = i * BLOCK_SIZE;
+                int length = Math.min(BLOCK_SIZE, data.length - start);
                 System.out.println("[INFO] 处理块 " + i + "，大小：" + length + "字节");
 
-                // 新增：计算当前块的MD5并记录
-                String chunkMd5 = DigestUtils.md5Hex(chunk);
+                byte[] chunkData = new byte[length];
+                System.arraycopy(data, start, chunkData, 0, length);
+                
+                String chunkMd5 = DigestUtils.md5Hex(chunkData);
                 chunkMd5List.add(chunkMd5);
                 System.out.println("[INFO] 块 " + i + " MD5：" + chunkMd5);
 
-                // 修复：文件应该直接存储在path路径下，而不是在path下创建子目录
                 String chunkPath = path + "_chunk_" + i;
-                writeToLocal(getLocalFilePath(chunkPath), chunk, 0);
+                String localChunkPath = getLocalFilePath(fileSystemName, chunkPath);
+                java.nio.file.Path chunkFilePath = Paths.get(localChunkPath);
+                // 确保父目录存在
+                java.nio.file.Path parentDir = chunkFilePath.getParent();
+                if (parentDir != null && !java.nio.file.Files.exists(parentDir)) {
+                    java.nio.file.Files.createDirectories(parentDir);
+                }
+                Files.write(chunkFilePath, chunkData);
             }
 
-            // 2. 生成MD5清单文件（与分块文件同目录，不依赖metaServer）
+            // 3. 生成MD5清单文件
             String md5ListPath = path + "_md5_list.txt";
-            String localMd5ListPath = getLocalFilePath(md5ListPath);
-            // 新增：将List<String>格式化为字符串，再转为byte[]（适配方法参数）
-            StringBuilder md5Content = new StringBuilder();
-            for (int i = 0; i < chunkMd5List.size(); i++) {
-                // 格式：块索引,MD5（每行一条，便于后续读取解析）
-                md5Content.append(i).append(",").append(chunkMd5List.get(i)).append(System.lineSeparator());
-            }
-            byte[] md5ListBytes = md5Content.toString().getBytes(StandardCharsets.UTF_8); // 转为byte[]
-            writeMd5ListToLocal(localMd5ListPath, md5ListBytes);
-            System.out.println("[INFO] MD5清单文件已生成：" + localMd5ListPath);
+            String localMd5ListPath = getLocalFilePath(fileSystemName, md5ListPath);
+            String md5ListContent = String.join("\n", chunkMd5List);
+            writeToLocal(localMd5ListPath, md5ListContent.getBytes(StandardCharsets.UTF_8), 0);
+            System.out.println("[INFO] MD5清单文件已生成：" + localMd5ListPath + "，包含" + chunkMd5List.size() + "个MD5值");
 
-            // 更新ZK中的已使用容量
-            long totalDataSize = data.length + md5ListBytes.length;
-            zkService.addUsedCapacity(totalDataSize);
-            System.out.println("[INFO] 容量更新: +" + totalDataSize + " 字节");
-
-            // 文件计数+1（按逻辑文件计数）
-            zkService.addFileCount(1);
-            
-            // 不再由 DataServer 自行进行三副本同步；由 MetaServer 负责调度多副本写入
-            // 这里无论是否副本同步请求，均只写入本地
-            if (isReplicaSync) {
-                System.out.println("[INFO] 副本同步请求，仅写入本地");
+            // 4. 如果不是副本同步请求，则尝试同步到其他DataServer（简化实现）
+            if (!isReplicaSync) {
+                System.out.println("[INFO] 非副本同步请求，简化副本同步逻辑");
+                // 这里可以添加获取其他DataServer地址的逻辑
+                // 暂时跳过，实际实现时需要从ZK获取其他DataServer地址
             } else {
-                System.out.println("[INFO] 原始写入请求，由MetaServer负责三副本调度，本节点仅写入本地");
+                System.out.println("[INFO] 副本同步请求，跳过同步到其他DataServer");
             }
 
-            System.out.println("[INFO] 分块写入完成，三副本位置：" + replicaLocations);
-
+            // 5. 返回副本位置列表
+            System.out.println("[INFO] 分块写入完成，文件系统: " + fileSystemName + ", 路径：" + path + "，副本位置：" + replicaLocations);
             return replicaLocations;
+
         } catch (Exception e) {
-            System.err.println("[ERROR] 分块写入失败：" + e.getMessage());
+            System.err.println("[ERROR] 分块写入失败：fileSystemName=" + fileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
             throw new RuntimeException("Write with chunk failed", e);
         }
     }
 
-    // 新增：从本地MD5清单文件读取预期MD5列表
-    private List<String> readMd5ListFromLocal(String localMd5ListPath) throws Exception {
-        List<String> expectedChunkMd5 = new ArrayList<>();
-        File md5File = new File(localMd5ListPath);
-        if (!md5File.exists()) {
-            throw new RuntimeException("MD5清单文件不存在：" + localMd5ListPath);
+    /**
+     * 同步数据到其他DataServer
+     */
+    private boolean syncToOtherDataServer(String fileSystemName, String otherServer, String path, byte[] data) {
+        try {
+            String url = "http://" + otherServer + "/write";
+            
+            // 构建请求参数
+            String queryParams = String.format("?path=%s&offset=0&length=%d", path, data.length);
+            
+            // 设置请求头
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
+            headers.set("X-Is-Replica-Sync", "true");
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+            
+            // 发送请求
+            org.springframework.http.HttpEntity<byte[]> entity = new org.springframework.http.HttpEntity<>(data, headers);
+            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+            org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(
+                url + queryParams,
+                org.springframework.http.HttpMethod.POST,
+                entity,
+                String.class
+            );
+            
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("[ERROR] 同步到其他DataServer失败：" + otherServer + "，错误：" + e.getMessage());
+            return false;
         }
-
-        // 按行读取，解析“块索引,MD5”格式
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(md5File))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.trim().isEmpty()) continue;
-                String[] parts = line.split(",");
-                if (parts.length != 2) {
-                    throw new RuntimeException("MD5清单格式错误：" + line);
-                }
-                expectedChunkMd5.add(parts[1]); // 仅保留MD5值
-            }
-        }
-        return expectedChunkMd5;
-    }
-
-    // 新增：将MD5列表写入本地清单文件
-    public void writeMd5ListToLocal(String md5ListPath, byte[] md5ListData) throws IOException {
-        // 步骤1：规范化路径，避免因路径格式错误导致父目录为null
-        // （例如处理path为"/test/7.txt/md5_list.txt"的情况，确保能解析出父目录）
-        File md5ListFile = new File(md5ListPath);
-
-        // 关键校验：若父目录为null（路径格式错误），手动构造合理路径
-        if (md5ListFile.getParentFile() == null) {
-            // 假设本地存储根目录为localStoragePath（如D:\data\apps\minfs\dataserver\9002）
-            // 拼接根目录与MD5清单路径，确保父目录存在
-            md5ListFile = new File(localStoragePath, md5ListPath);
-            System.out.println("[WARN] 路径格式异常，自动拼接根目录后路径：" + md5ListFile.getAbsolutePath());
-        }
-
-        // 步骤2：创建父目录（此时getParentFile()已非null）
-        File parentDir = md5ListFile.getParentFile();
-        if (!parentDir.exists()) {
-            boolean dirCreated = parentDir.mkdirs();
-            if (!dirCreated) {
-                throw new IOException("创建MD5清单父目录失败：" + parentDir.getAbsolutePath());
-            }
-            System.out.println("[INFO] 创建MD5清单父目录：" + parentDir.getAbsolutePath());
-        }
-
-        // 直接用byte[]写入文件（无需List转换）
-        try (FileOutputStream fos = new FileOutputStream(md5ListFile)) {
-            fos.write(md5ListData);
-        }
-        System.out.println("[INFO] MD5清单写入成功：" + md5ListPath);
     }
 
     /**
-     * 删除本地文件（包括分块文件和MD5清单）
-     * @param path 文件路径
-     * @return 是否删除成功
+     * 从本地读取MD5清单文件
      */
-    public boolean deleteFileLocally(String path) {
+    private List<String> readMd5ListFromLocal(String localMd5ListPath) {
         try {
-            System.out.println("[INFO] 开始删除本地文件：" + path);
-            
-            // 计算要删除的文件总大小
-            long totalDeletedSize = calculateFileSize(path);
-
-            // 删除分块文件
-            boolean chunksDeleted = deleteChunkFiles(path);
-            
-            // 删除MD5清单文件
-            boolean md5ListDeleted = deleteMd5ListFile(path);
-            
-            if (chunksDeleted && md5ListDeleted) {
-                // 更新ZK中的已使用容量
-                zkService.subtractUsedCapacity(totalDeletedSize);
-                System.out.println("[INFO] 容量更新: -" + totalDeletedSize + " 字节");
-                // 文件计数-1
-                zkService.subtractFileCount(1);
-                
-                System.out.println("[INFO] 本地文件删除成功：" + path);
-                return true;
-            } else {
-                System.err.println("[ERROR] 本地文件删除失败：" + path + 
-                                 ", chunksDeleted=" + chunksDeleted + 
-                                 ", md5ListDeleted=" + md5ListDeleted);
-                return false;
+            File md5ListFile = new File(localMd5ListPath);
+            if (!md5ListFile.exists()) {
+                System.err.println("[ERROR] MD5清单文件不存在：" + localMd5ListPath);
+                return new ArrayList<>();
             }
+            
+            List<String> md5List = Files.readAllLines(md5ListFile.toPath(), StandardCharsets.UTF_8);
+            System.out.println("[INFO] 成功读取MD5清单文件：" + localMd5ListPath + "，包含" + md5List.size() + "个MD5值");
+            return md5List;
         } catch (Exception e) {
-            System.err.println("[ERROR] 删除本地文件失败：" + e.getMessage());
+            System.err.println("[ERROR] 读取MD5清单文件失败：" + localMd5ListPath + "，错误：" + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 写入MD5清单到本地
+     * @param fileSystemName 文件系统名称
+     * @param path MD5清单路径
+     * @param md5ListData MD5清单数据
+     * @param isReplicaSync 是否为副本同步请求
+     * @return 是否写入成功
+     */
+    public boolean writeMd5List(String fileSystemName, String path, byte[] md5ListData, boolean isReplicaSync) {
+        try {
+            System.out.println("[INFO] 写入MD5清单，文件系统: " + fileSystemName + ", 路径: " + path + ", 数据大小: " + md5ListData.length + "字节, 副本同步: " + isReplicaSync);
+            
+            // 写入MD5清单文件
+            String localMd5ListPath = getLocalFilePath(fileSystemName, path);
+            writeToLocal(localMd5ListPath, md5ListData, 0);
+            
+            System.out.println("[INFO] MD5清单写入成功，文件系统: " + fileSystemName + ", 路径: " + path);
+                return true;
+        } catch (Exception e) {
+            System.err.println("[ERROR] MD5清单写入失败，文件系统: " + fileSystemName + ", 路径: " + path + ", 错误: " + e.getMessage());
             return false;
         }
     }
     
     /**
-     * 删除分块文件
+     * 删除本地文件
+     * @param fileSystemName 文件系统名称
+     * @param path 文件路径
+     * @return 是否删除成功
      */
-    private boolean deleteChunkFiles(String path) {
+    public boolean deleteFileLocally(String fileSystemName, String path) {
         try {
-            boolean allDeleted = true;
-            int chunkIndex = 0;
+            System.out.println("[INFO] 删除本地文件，文件系统: " + fileSystemName + ", 路径: " + path);
             
+            // 删除分块文件
+            int chunkIndex = 0;
             while (true) {
                 String chunkPath = path + "_chunk_" + chunkIndex;
-                String localChunkPath = getLocalFilePath(chunkPath);
+                String localChunkPath = getLocalFilePath(fileSystemName, chunkPath);
                 File chunkFile = new File(localChunkPath);
                 
                 if (!chunkFile.exists()) {
-                    break; // 没有更多分块文件
+                    break;
                 }
                 
-                boolean deleted = chunkFile.delete();
-                if (deleted) {
-                    System.out.println("[INFO] 删除分块文件成功：" + chunkPath);
+                if (chunkFile.delete()) {
+                    System.out.println("[INFO] 删除分块文件成功：" + localChunkPath);
                 } else {
-                    System.err.println("[ERROR] 删除分块文件失败：" + chunkPath);
-                    allDeleted = false;
+                    System.err.println("[ERROR] 删除分块文件失败：" + localChunkPath);
                 }
                 
                 chunkIndex++;
             }
             
-            return allDeleted;
-        } catch (Exception e) {
-            System.err.println("[ERROR] 删除分块文件失败：" + e.getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * 删除MD5清单文件
-     */
-    private boolean deleteMd5ListFile(String path) {
-        try {
+            // 删除MD5清单文件
             String md5ListPath = path + "_md5_list.txt";
-            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            String localMd5ListPath = getLocalFilePath(fileSystemName, md5ListPath);
             File md5ListFile = new File(localMd5ListPath);
+            if (md5ListFile.exists()) {
+                if (md5ListFile.delete()) {
+                    System.out.println("[INFO] 删除MD5清单文件成功：" + localMd5ListPath);
+                } else {
+                    System.err.println("[ERROR] 删除MD5清单文件失败：" + localMd5ListPath);
+                }
+            }
             
-            if (!md5ListFile.exists()) {
-                System.out.println("[INFO] MD5清单文件不存在，跳过删除：" + md5ListPath);
+            System.out.println("[INFO] 本地文件删除完成，文件系统: " + fileSystemName + ", 路径: " + path);
                 return true;
-            }
-            
-            boolean deleted = md5ListFile.delete();
-            if (deleted) {
-                System.out.println("[INFO] 删除MD5清单文件成功：" + md5ListPath);
-            } else {
-                System.err.println("[ERROR] 删除MD5清单文件失败：" + md5ListPath);
-            }
-            
-            return deleted;
         } catch (Exception e) {
-            System.err.println("[ERROR] 删除MD5清单文件失败：" + e.getMessage());
+            System.err.println("[ERROR] 删除本地文件失败，文件系统: " + fileSystemName + ", 路径: " + path + ", 错误: " + e.getMessage());
             return false;
         }
     }
@@ -410,12 +379,12 @@ public class DataService {
     /**
      * 计算文件大小（包括分块文件和MD5清单）
      */
-    private long calculateFileSize(String path) {
+    private long calculateFileSize(String fileSystemName, String path) {
         long totalSize = 0;
         try {
             // 计算MD5清单文件大小
             String md5ListPath = path + "_md5_list.txt";
-            String localMd5ListPath = getLocalFilePath(md5ListPath);
+            String localMd5ListPath = getLocalFilePath(fileSystemName, md5ListPath);
             File md5ListFile = new File(localMd5ListPath);
             if (md5ListFile.exists()) {
                 totalSize += md5ListFile.length();
@@ -425,7 +394,7 @@ public class DataService {
             int chunkIndex = 0;
             while (true) {
                 String chunkPath = path + "_chunk_" + chunkIndex;
-                String localChunkPath = getLocalFilePath(chunkPath);
+                String localChunkPath = getLocalFilePath(fileSystemName, chunkPath);
                 File chunkFile = new File(localChunkPath);
                 
                 if (!chunkFile.exists()) {
@@ -435,7 +404,7 @@ public class DataService {
                 chunkIndex++;
             }
         } catch (Exception e) {
-            System.err.println("[ERROR] 计算文件大小失败：" + e.getMessage());
+            System.err.println("[ERROR] 计算文件大小失败：fileSystemName=" + fileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
             return 0;
         }
         return totalSize;

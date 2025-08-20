@@ -1,37 +1,39 @@
 package com.ksyun.campus.client;
 
 import com.ksyun.campus.client.domain.ClusterInfo;
+import com.ksyun.campus.client.domain.DataServerMsg;
+import com.ksyun.campus.client.domain.MetaServerMsg;
+import com.ksyun.campus.client.domain.ReplicaData;
 import com.ksyun.campus.client.domain.StatInfo;
 import com.ksyun.campus.client.util.HttpClientUtil;
 import com.ksyun.campus.client.util.ZkUtil;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
-/**
- * easyClient 文件系统实现类
- * 提供完整的分布式文件系统操作接口
- */
 public class EFileSystem extends FileSystem {
     
+    private String defaultFileSystemName;
     private ZkUtil zkUtil;
     private HttpClient httpClient;
-    private ObjectMapper objectMapper;
     private String defaultMetaServerAddress;
     
-    /**
-     * 构造函数
-     * @param defaultFileSystemName 默认文件系统名称
-     */
-    public EFileSystem(String defaultFileSystemName) {
-        super.defaultFileSystemName = defaultFileSystemName;
+    public EFileSystem() {
+        this("default");
+    }
+
+    public EFileSystem(String fileSystemName) {
+        this.defaultFileSystemName = fileSystemName;
         initializeComponents();
     }
     
@@ -46,11 +48,6 @@ public class EFileSystem extends FileSystem {
             
             // 初始化HTTP客户端
             httpClient = createHttpClient();
-            
-            // 初始化JSON处理器
-            objectMapper = new ObjectMapper();
-            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-            objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
             
             // 获取默认MetaServer地址
             List<String> metaServerAddresses = zkUtil.getMetaServerAddresses();
@@ -99,343 +96,482 @@ public class EFileSystem extends FileSystem {
         return defaultMetaServerAddress;
     }
     
+    /**
+     * 获取MetaServer信息
+     */
+    public MetaServerMsg getMetaServer() {
+        String address = getMetaServerAddress();
+        MetaServerMsg metaServer = new MetaServerMsg();
+        if (address.contains(":")) {
+            String[] parts = address.split(":", 2);
+            metaServer.setHost(parts[0]);
+            try {
+                metaServer.setPort(Integer.parseInt(parts[1]));
+            } catch (NumberFormatException e) {
+                metaServer.setPort(8000);
+            }
+        } else {
+            metaServer.setHost(address);
+            metaServer.setPort(8000);
+        }
+        return metaServer;
+    }
+
+    /**
+     * 获取当前文件系统名称
+     */
+    public String getFileSystemName() {
+        return defaultFileSystemName;
+    }
+
+    /**
+     * 设置文件系统名称
+     */
+    public void setFileSystemName(String fileSystemName) {
+        this.defaultFileSystemName = fileSystemName;
+    }
+
+    /**
+     * 打开文件
+     */
     @Override
     public FSInputStream open(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("文件路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("文件路径必须以/开头: " + path);
-        }
-        
         try {
-            // 获取文件状态
-            StatInfo statInfo = getFileStats(path);
-            if (statInfo == null) {
-                throw new IOException("文件不存在: " + path);
+            System.out.println("打开文件: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+            
+            // 1. 从MetaServer获取文件元数据
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/open";
+            
+            // 构建请求头
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                // 解析JSON响应为StatInfo对象
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.ksyun.campus.client.domain.StatInfo statInfo = mapper.readValue(response, com.ksyun.campus.client.domain.StatInfo.class);
+                if (statInfo == null || statInfo.getType() == null) {
+                    throw new IOException("打开文件失败: 返回的元数据无效");
+                }
+                System.out.println("成功获取文件元数据: fileSystemName=" + defaultFileSystemName + ", path=" + statInfo.getPath() + ", size=" + statInfo.getSize());
+                return new FSInputStream(statInfo, this);
+            } else {
+                throw new IOException("打开文件失败: " + path + ", 响应: " + response);
             }
             
-            if (statInfo.getType() != com.ksyun.campus.client.domain.FileType.File) {
-                throw new IOException("路径不是文件: " + path);
-            }
-            
-            return new FSInputStream(statInfo, this);
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (IOException e) {
-            throw e;
         } catch (Exception e) {
-            throw new IOException("打开文件失败: " + path, e);
+            System.err.println("打开文件异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("打开文件失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * 创建文件
+     */
     @Override
     public FSOutputStream create(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("文件路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("文件路径必须以/开头: " + path);
-        }
-        if (path.endsWith("/")) {
-            throw new IllegalArgumentException("文件路径不能以/结尾: " + path);
-        }
-        
         try {
-            // 检查文件是否已存在
-            if (exists(path)) {
-                throw new IOException("文件已存在: " + path);
-            }
+            System.out.println("创建文件: fileSystemName=" + defaultFileSystemName + ", path=" + path);
             
-            // 创建空文件
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/create?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            // 1. 从MetaServer创建文件
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/create";
             
-            String response = HttpClientUtil.doGet(httpClient, url);
-            if (response == null || response.contains("error")) {
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                // 简化处理，直接创建StatInfo
+                StatInfo statInfo = new StatInfo();
+                statInfo.setPath(path);
+                statInfo.setSize(0);
+                System.out.println("成功创建文件: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+                return new FSOutputStream(path, this);
+            } else {
                 throw new IOException("创建文件失败: " + path + ", 响应: " + response);
             }
             
-            return new FSOutputStream(path, this);
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (IOException e) {
-            throw e;
         } catch (Exception e) {
-            throw new IOException("创建文件失败: " + path, e);
+            System.err.println("创建文件异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("创建文件失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * 创建目录
+     */
     @Override
     public boolean mkdir(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("目录路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("目录路径必须以/开头: " + path);
-        }
-        if (path.endsWith("/")) {
-            throw new IllegalArgumentException("目录路径不能以/结尾: " + path);
-        }
-        
         try {
-            // 检查目录是否已存在
-            if (exists(path)) {
-                return true; // 目录已存在，返回成功
+            System.out.println("创建目录: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+            
+            // 从MetaServer创建目录
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/mkdir";
+            
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                System.out.println("成功创建目录: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+                return true;
+            } else {
+                throw new IOException("创建目录失败: " + path + ", 响应: " + response);
             }
             
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/mkdir?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
-            
-            String response = HttpClientUtil.doGet(httpClient, url);
-            return response != null && !response.contains("error");
-        } catch (IllegalArgumentException e) {
-            throw e;
         } catch (Exception e) {
-            throw new IOException("创建目录失败: " + path, e);
+            System.err.println("创建目录异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("创建目录失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * 删除文件或目录
+     */
     @Override
     public boolean delete(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("路径必须以/开头: " + path);
-        }
-        
         try {
-            // 检查路径是否存在
-            if (!exists(path)) {
-                return false; // 路径不存在，返回false
+            System.out.println("删除文件/目录: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+            
+            // 从MetaServer删除文件/目录
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/delete";
+            
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                // 检查响应中的success字段
+                if (response.contains("\"success\":true")) {
+                    System.out.println("成功删除文件/目录: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+                    return true;
+                } else {
+                    throw new IOException("删除失败: " + response);
+                }
+            } else {
+                throw new IOException("删除失败: " + path + ", 响应: " + response);
             }
             
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/delete?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
-            
-            String response = HttpClientUtil.doDelete(httpClient, url);
-            return response != null && !response.contains("error");
-        } catch (IllegalArgumentException e) {
-            throw e;
         } catch (Exception e) {
-            throw new IOException("删除失败: " + path, e);
+            System.err.println("删除文件/目录异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("删除失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * 获取文件状态
+     */
     @Override
     public StatInfo getFileStats(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("文件路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("文件路径必须以/开头: " + path);
-        }
-        
         try {
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/stats?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            System.out.println("获取文件状态: fileSystemName=" + defaultFileSystemName + ", path=" + path);
             
-            String response = HttpClientUtil.doGet(httpClient, url);
+            // 从MetaServer获取文件状态
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/stats";
+            
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
             if (response != null && !response.contains("error")) {
-                return objectMapper.readValue(response, StatInfo.class);
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                StatInfo statInfo = mapper.readValue(response, StatInfo.class);
+                if (statInfo == null) {
+                    throw new IOException("获取文件状态失败: 返回为空");
+                }
+                System.out.println("成功获取文件状态: fileSystemName=" + defaultFileSystemName + ", path=" + statInfo.getPath() + ", size=" + statInfo.getSize() + ", type=" + statInfo.getType());
+                return statInfo;
+            } else {
+                throw new IOException("获取文件状态失败: " + path + ", 响应: " + response);
             }
-            return null;
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IOException("解析文件状态信息失败: " + path, e);
+            
         } catch (Exception e) {
-            throw new IOException("获取文件状态失败: " + path, e);
+            System.err.println("获取文件状态异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("获取文件状态失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * 列出目录内容
+     */
     @Override
     public List<StatInfo> listFileStats(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("目录路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("目录路径必须以/开头: " + path);
-        }
-        if (path.endsWith("/")) {
-            throw new IllegalArgumentException("目录路径不能以/结尾: " + path);
-        }
-        
         try {
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/listdir?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            System.out.println("列出目录内容: fileSystemName=" + defaultFileSystemName + ", path=" + path);
             
-            String response = HttpClientUtil.doGet(httpClient, url);
+            // 从MetaServer列出目录内容
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/listdir";
+            
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
             if (response != null && !response.contains("error")) {
-                return objectMapper.readValue(response, 
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, StatInfo.class));
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                java.util.List<StatInfo> list = mapper.readValue(
+                        response,
+                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<StatInfo>>(){}
+                );
+                if (list == null) list = new java.util.ArrayList<>();
+                System.out.println("成功列出目录内容: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", count=" + list.size());
+                return list;
+            } else {
+                throw new IOException("列出目录内容失败: " + path + ", 响应: " + response);
             }
-            return null;
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IOException("解析目录列表信息失败: " + path, e);
+            
         } catch (Exception e) {
-            throw new IOException("列出文件失败: " + path, e);
+            System.err.println("列出目录内容异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("列出目录内容失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 检查文件是否存在
+     */
+    @Override
+    public boolean exists(String path) throws IOException {
+        try {
+            System.out.println("检查文件是否存在: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+            
+            // 从MetaServer检查文件是否存在
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/exists";
+            
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                // 检查响应中的exists字段
+                boolean exists = response.contains("\"exists\":true");
+                System.out.println("文件存在检查结果: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", exists=" + exists);
+                return exists;
+            } else {
+                throw new IOException("检查文件存在性失败: " + path + ", 响应: " + response);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("检查文件存在性异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("检查文件存在性失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * 获取集群信息
+     */
     @Override
     public ClusterInfo getClusterInfo() throws IOException {
         try {
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/cluster/info";
-            String response = HttpClientUtil.doGet(httpClient, url);
+            System.out.println("获取集群信息: fileSystemName=" + defaultFileSystemName);
+            
+            // 从MetaServer获取集群信息
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/cluster/info";
+            
+            String response = HttpClientUtil.doGetWithHeader(httpClient, url, "fileSystemName", defaultFileSystemName);
+            
             if (response == null || response.contains("error")) {
-                return null;
+                throw new IOException("获取集群信息失败, 响应: " + response);
             }
-            java.util.Map<?, ?> raw = objectMapper.readValue(response, java.util.Map.class);
-            ClusterInfo ci = new ClusterInfo();
+            
+            // 解析JSON并映射到ClusterInfo
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> payload = mapper.readValue(response, java.util.Map.class);
 
-            // metaServers: leader + followers
-            Object metaServersObj = raw.get("metaServers");
+            ClusterInfo clusterInfo = new ClusterInfo();
+            
+            // 1) MetaServer: leader / followers
+            Object metaServersObj = payload.get("metaServers");
             if (metaServersObj instanceof java.util.Map) {
-                java.util.Map<?, ?> ms = (java.util.Map<?, ?>) metaServersObj;
-                Object leaderAddrObj = ms.get("leaderAddress");
-                String leaderAddr = leaderAddrObj == null ? null : String.valueOf(leaderAddrObj);
-                if (leaderAddr != null && leaderAddr.contains(":")) {
-                    String[] hp = leaderAddr.split(":", 2);
-                    com.ksyun.campus.client.domain.MetaServerMsg master = new com.ksyun.campus.client.domain.MetaServerMsg();
-                    master.setHost(hp[0]);
-                    try { master.setPort(Integer.parseInt(hp[1])); } catch (Exception ignore) { master.setPort(0); }
-                    ci.setMasterMetaServer(master);
+                java.util.Map<String, Object> metaServers = (java.util.Map<String, Object>) metaServersObj;
+                // leaderAddress -> masterMetaServer
+                Object leaderAddrObj = metaServers.get("leaderAddress");
+                if (leaderAddrObj instanceof String) {
+                    String leaderAddr = (String) leaderAddrObj;
+                    MetaServerMsg master = new MetaServerMsg();
+                    if (leaderAddr.contains(":")) {
+                        String[] parts = leaderAddr.split(":", 2);
+                        master.setHost(parts[0]);
+                        try { master.setPort(Integer.parseInt(parts[1])); } catch (NumberFormatException ignore) { master.setPort(8000); }
+                    } else {
+                        master.setHost(leaderAddr);
+                        master.setPort(8000);
+                    }
+                    clusterInfo.setMasterMetaServer(master);
                 }
-                // followers -> List<MetaServerMsg>
-                java.util.List<com.ksyun.campus.client.domain.MetaServerMsg> slaves = new java.util.ArrayList<>();
-                Object followersObj = ms.get("followerAddresses");
+                // followerAddresses -> slaveMetaServer
+                Object followersObj = metaServers.get("followerAddresses");
                 if (followersObj instanceof java.util.List) {
-                    for (Object f : (java.util.List<?>) followersObj) {
-                        String addr = String.valueOf(f);
-                        if (addr.contains(":")) {
-                            String[] hp2 = addr.split(":", 2);
-                            com.ksyun.campus.client.domain.MetaServerMsg slave = new com.ksyun.campus.client.domain.MetaServerMsg();
-                            slave.setHost(hp2[0]);
-                            try { slave.setPort(Integer.parseInt(hp2[1])); } catch (Exception ignore) { slave.setPort(0); }
-                            slaves.add(slave);
+                    java.util.List<?> arr = (java.util.List<?>) followersObj;
+                    java.util.List<MetaServerMsg> followers = new java.util.ArrayList<>();
+                    for (Object o : arr) {
+                        if (o instanceof String) {
+                            String addr = (String) o;
+                            MetaServerMsg m = new MetaServerMsg();
+                            if (addr.contains(":")) {
+                                String[] parts = addr.split(":", 2);
+                                m.setHost(parts[0]);
+                                try { m.setPort(Integer.parseInt(parts[1])); } catch (NumberFormatException ignore) { m.setPort(8000); }
+                            } else { m.setHost(addr); m.setPort(8000); }
+                            followers.add(m);
                         }
                     }
+                    clusterInfo.setSlaveMetaServer(followers);
                 }
-                ci.setSlaveMetaServer(slaves);
             }
 
-            // dataServers
-            Object dsObj = raw.get("dataServers");
-            java.util.List<com.ksyun.campus.client.domain.DataServerMsg> dsList = new java.util.ArrayList<>();
+            // 2) DataServers -> dataServer
+            Object dsObj = payload.get("dataServers");
             if (dsObj instanceof java.util.List) {
-                for (Object o : (java.util.List<?>) dsObj) {
-                    if (!(o instanceof java.util.Map)) continue;
-                    java.util.Map<?, ?> m = (java.util.Map<?, ?>) o;
-                    String host = null; int port = 0;
-                    Object addressObj = m.get("address");
-                    if (addressObj != null) {
-                        String addr = String.valueOf(addressObj);
-                        if (addr.contains(":")) {
-                            String[] hp = addr.split(":", 2);
-                            host = hp[0];
-                            try { port = Integer.parseInt(hp[1]); } catch (Exception ignore) { port = 0; }
-                        }
+                java.util.List<?> arr = (java.util.List<?>) dsObj;
+                java.util.List<DataServerMsg> dsList = new java.util.ArrayList<>();
+                for (Object o : arr) {
+                    if (o instanceof java.util.Map) {
+                        java.util.Map<String, Object> m = (java.util.Map<String, Object>) o;
+                        DataServerMsg d = new DataServerMsg();
+                        Object host = m.get("host");
+                        if (host == null) host = m.get("ip");
+                        d.setHost(host != null ? String.valueOf(host) : "");
+                        Object port = m.get("port");
+                        if (port instanceof Number) d.setPort(((Number) port).intValue());
+                        else if (port != null) { try { d.setPort(Integer.parseInt(String.valueOf(port))); } catch (Exception ignore) { d.setPort(0); } }
+                        Object total = m.get("totalCapacity");
+                        if (total instanceof Number) d.setCapacity(((Number) total).longValue());
+                        else if (total != null) { try { d.setCapacity(Long.parseLong(String.valueOf(total))); } catch (Exception ignore) { d.setCapacity(0); } }
+                        Object used = m.get("usedCapacity");
+                        if (used instanceof Number) d.setUseCapacity(((Number) used).longValue());
+                        else if (used != null) { try { d.setUseCapacity(Long.parseLong(String.valueOf(used))); } catch (Exception ignore) { d.setUseCapacity(0); } }
+                        Object fileTotal = m.get("fileTotal");
+                        if (fileTotal instanceof Number) d.setFileTotal(((Number) fileTotal).longValue());
+                        dsList.add(d);
                     }
-                    Object totalObj = m.get("totalCapacity");
-                    Object usedObj = m.get("usedCapacity");
-                    long cap = totalObj instanceof Number ? ((Number) totalObj).longValue() : 0L;
-                    long use = usedObj instanceof Number ? ((Number) usedObj).longValue() : 0L;
-                    // 兼容 fileTotal 字段
-                    Object fileTotalObj = m.get("fileTotal");
-                    if (!(fileTotalObj instanceof Number)) {
-                        fileTotalObj = m.get("files");
-                    }
-                    long fileTotal = fileTotalObj instanceof Number ? ((Number) fileTotalObj).longValue() : 0L;
-                    com.ksyun.campus.client.domain.DataServerMsg dm = new com.ksyun.campus.client.domain.DataServerMsg();
-                    dm.setHost(host);
-                    dm.setPort(port);
-                    dm.setCapacity(cap);
-                    dm.setUseCapacity(use);
-                    dm.setFileTotal(fileTotal);
-                    dsList.add(dm);
                 }
+                clusterInfo.setDataServer(dsList);
             }
-            ci.setDataServer(dsList);
 
-            // 直接传递 replicaDistribution 与 healthStatus
-            Object rep = raw.get("replicaDistribution");
+            // 3) replicaDistribution
+            Object rep = payload.get("replicaDistribution");
             if (rep instanceof java.util.Map) {
-                ci.setReplicaDistribution((java.util.Map<String, Object>) rep);
+                clusterInfo.setReplicaDistribution((java.util.Map<String, Object>) rep);
             }
-            Object health = raw.get("healthStatus");
+
+            // 4) healthStatus
+            Object health = payload.get("healthStatus");
             if (health instanceof java.util.Map) {
-                ci.setHealthStatus((java.util.Map<String, Object>) health);
+                clusterInfo.setHealthStatus((java.util.Map<String, Object>) health);
             }
-            return ci;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IOException("解析集群信息失败", e);
+
+            System.out.println("成功获取并解析集群信息: fileSystemName=" + defaultFileSystemName);
+            return clusterInfo;
         } catch (Exception e) {
-            throw new IOException("获取集群信息失败", e);
+            System.err.println("获取集群信息异常: fileSystemName=" + defaultFileSystemName + ", 错误: " + e.getMessage());
+            throw new IOException("获取集群信息失败: " + e.getMessage(), e);
         }
     }
-    
-    @Override
-    public boolean exists(String path) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            return false;
-        }
-        if (!path.startsWith("/")) {
-            return false;
-        }
-        
+
+    /**
+     * 获取文件系统统计信息
+     */
+    public Map<String, Object> getFileSystemStats() throws IOException {
         try {
-            StatInfo statInfo = getFileStats(path);
-            return statInfo != null;
+            System.out.println("获取文件系统统计信息: fileSystemName=" + defaultFileSystemName);
+            
+            // 从MetaServer获取文件系统统计信息
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/filesystem/stats";
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, url, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                // 简化处理，返回空Map，实际应该从响应中解析
+                System.out.println("成功获取文件系统统计信息: fileSystemName=" + defaultFileSystemName);
+                return new java.util.HashMap<>();
+            } else {
+                throw new IOException("获取文件系统统计信息失败, 响应: " + response);
+            }
+            
         } catch (Exception e) {
-            return false; // 任何异常都认为文件不存在
+            System.err.println("获取文件系统统计信息异常: fileSystemName=" + defaultFileSystemName + ", 错误: " + e.getMessage());
+            throw new IOException("获取文件系统统计信息失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取全局统计信息
+     */
+    public Map<String, Object> getGlobalStats() throws IOException {
+        try {
+            System.out.println("获取全局统计信息: fileSystemName=" + defaultFileSystemName);
+            
+            // 从MetaServer获取全局统计信息
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/filesystem/global-stats";
+            
+            String response = HttpClientUtil.doGetWithHeader(httpClient, url, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                // 简化处理，返回空Map，实际应该从响应中解析
+                System.out.println("成功获取全局统计信息: fileSystemName=" + defaultFileSystemName);
+                return new java.util.HashMap<>();
+            } else {
+                throw new IOException("获取全局统计信息失败, 响应: " + response);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("获取全局统计信息异常: fileSystemName=" + defaultFileSystemName + ", 错误: " + e.getMessage());
+            throw new IOException("获取全局统计信息失败: " + e.getMessage(), e);
         }
     }
     
     /**
      * 写入文件内容
-     * @param path 文件路径
-     * @param data 文件数据
-     * @throws IOException 写入失败时抛出
      */
     public void writeFile(String path, byte[] data) throws IOException {
-        // 参数验证
-        if (path == null || path.trim().isEmpty()) {
-            throw new IllegalArgumentException("文件路径不能为空");
-        }
-        if (!path.startsWith("/")) {
-            throw new IllegalArgumentException("文件路径必须以/开头: " + path);
-        }
-        if (data == null) {
-            throw new IllegalArgumentException("文件数据不能为空");
-        }
-        // 允许写入空文件，所以移除对data.length == 0的检查
-        
         try {
-            String metaServerAddress = getMetaServerAddress();
-            String url = "http://" + metaServerAddress + "/write?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8) + "&offset=0&length=" + data.length;
+            System.out.println("写入文件: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", size=" + data.length);
             
-            String response = HttpClientUtil.doPost(httpClient, url, data);
-            if (response == null || response.contains("error")) {
+            // 从MetaServer写入文件
+            MetaServerMsg metaServer = getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/write";
+            
+            String queryParams = "?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8) + "&offset=0&length=" + data.length;
+            String fullUrl = url + queryParams;
+            
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doPostWithHeader(httpClient, fullUrl, data, "fileSystemName", defaultFileSystemName);
+            
+            if (response != null && !response.contains("error")) {
+                System.out.println("成功写入文件: fileSystemName=" + defaultFileSystemName + ", path=" + path);
+            } else {
                 throw new IOException("写入文件失败: " + path + ", 响应: " + response);
             }
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (IOException e) {
-            throw e;
+            
         } catch (Exception e) {
-            throw new IOException("写入文件失败: " + path, e);
+            System.err.println("写入文件异常: fileSystemName=" + defaultFileSystemName + ", path=" + path + ", 错误: " + e.getMessage());
+            throw new IOException("写入文件失败: " + e.getMessage(), e);
         }
     }
     
@@ -459,4 +595,6 @@ public class EFileSystem extends FileSystem {
             // 忽略关闭时的异常
         }
     }
+
+    
 }

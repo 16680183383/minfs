@@ -37,14 +37,16 @@ public class DataServerClientService {
     
     /**
      * 创建文件时通知DataServer创建目录结构
+     * @param fileSystemName 文件系统名称
      * @param replicaData 副本信息
      * @return 是否成功
      */
-    public boolean createFileOnDataServer(ReplicaData replicaData) {
+    public boolean createFileOnDataServer(String fileSystemName, ReplicaData replicaData) {
         try {
             String url = "http://" + replicaData.dsNode + "/create";
             
             HttpHeaders headers = new HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
             
             // 构建请求参数
             String path = replicaData.path;
@@ -58,17 +60,17 @@ public class DataServerClientService {
             );
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("成功在DataServer创建文件: {} -> {}", replicaData.dsNode, path);
+                log.info("成功在DataServer创建文件: fileSystemName={}, {} -> {}", fileSystemName, replicaData.dsNode, path);
                 dataServerStatus.put(replicaData.dsNode, true);
                 return true;
             } else {
-                log.error("在DataServer创建文件失败: {} -> {}, 状态码: {}", 
-                         replicaData.dsNode, path, response.getStatusCode());
+                log.error("在DataServer创建文件失败: fileSystemName={}, {} -> {}, 状态码: {}", 
+                         fileSystemName, replicaData.dsNode, path, response.getStatusCode());
                 return false;
             }
             
         } catch (Exception e) {
-            log.error("在DataServer创建文件异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
+            log.error("在DataServer创建文件异常: fileSystemName={}, {} -> {}", fileSystemName, replicaData.dsNode, replicaData.path, e);
             dataServerStatus.put(replicaData.dsNode, false);
             return false;
         }
@@ -76,14 +78,16 @@ public class DataServerClientService {
     
     /**
      * 创建目录时通知DataServer创建目录结构
+     * @param fileSystemName 文件系统名称
      * @param replicaData 副本信息
      * @return 是否成功
      */
-    public boolean createDirectoryOnDataServer(ReplicaData replicaData) {
+    public boolean createDirectoryOnDataServer(String fileSystemName, ReplicaData replicaData) {
         try {
             String url = "http://" + replicaData.dsNode + "/mkdir";
             
             HttpHeaders headers = new HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
             
             // 构建请求参数
             String path = replicaData.path;
@@ -97,17 +101,17 @@ public class DataServerClientService {
             );
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("成功在DataServer创建目录: {} -> {}", replicaData.dsNode, path);
+                log.info("成功在DataServer创建目录: fileSystemName={}, {} -> {}", fileSystemName, replicaData.dsNode, path);
                 dataServerStatus.put(replicaData.dsNode, true);
                 return true;
             } else {
-                log.error("在DataServer创建目录失败: {} -> {}, 状态码: {}", 
-                         replicaData.dsNode, path, response.getStatusCode());
+                log.error("在DataServer创建目录失败: fileSystemName={}, {} -> {}, 状态码: {}", 
+                         fileSystemName, replicaData.dsNode, path, response.getStatusCode());
                 return false;
             }
             
         } catch (Exception e) {
-            log.error("在DataServer创建目录异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
+            log.error("在DataServer创建目录异常: fileSystemName={}, {} -> {}", fileSystemName, replicaData.dsNode, replicaData.path, e);
             dataServerStatus.put(replicaData.dsNode, false);
             return false;
         }
@@ -115,14 +119,16 @@ public class DataServerClientService {
     
     /**
      * 删除文件时通知DataServer删除实际数据
+     * @param fileSystemName 文件系统名称
      * @param replicaData 副本信息
      * @return 是否成功
      */
-    public boolean deleteFileFromDataServer(ReplicaData replicaData) {
+    public boolean deleteFileFromDataServer(String fileSystemName, ReplicaData replicaData) {
         try {
             String url = "http://" + replicaData.dsNode + "/delete";
             
             HttpHeaders headers = new HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
             
             // 构建请求参数
             String path = replicaData.path;
@@ -136,31 +142,31 @@ public class DataServerClientService {
             );
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("成功从DataServer删除: {} -> {}", replicaData.dsNode, path);
+                log.info("成功从DataServer删除: fileSystemName={}, {} -> {}", fileSystemName, replicaData.dsNode, path);
                 return true;
             } else {
-                log.error("从DataServer删除失败: {} -> {}, 状态码: {}", 
-                         replicaData.dsNode, path, response.getStatusCode());
+                log.error("从DataServer删除失败: fileSystemName={}, {} -> {}, 状态码: {}", 
+                         fileSystemName, replicaData.dsNode, path, response.getStatusCode());
                 return false;
             }
             
         } catch (Exception e) {
-            log.error("从DataServer删除异常: {} -> {}", replicaData.dsNode, replicaData.path, e);
+            log.error("从DataServer删除异常: fileSystemName={}, {} -> {}", fileSystemName, replicaData.dsNode, replicaData.path, e);
             return false;
         }
     }
     
     /**
      * 向多个DataServer并发创建文件/目录
+     * @param fileSystemName 文件系统名称
      * @param replicas 副本列表
      * @param isDirectory 是否为目录
      * @return 成功创建的副本数量
      */
-    public int createOnMultipleDataServers(List<ReplicaData> replicas, boolean isDirectory) {
+    public int createOnMultipleDataServers(String fileSystemName, List<ReplicaData> replicas, boolean isDirectory) {
         List<CompletableFuture<Boolean>> futures = replicas.stream()
             .map(replica -> CompletableFuture.supplyAsync(() -> 
-                isDirectory ? createDirectoryOnDataServer(replica) : createFileOnDataServer(replica), 
-                executorService))
+                isDirectory ? createDirectoryOnDataServer(fileSystemName, replica) : createFileOnDataServer(fileSystemName, replica), executorService))
             .toList();
         
         // 等待所有创建完成
@@ -183,17 +189,18 @@ public class DataServerClientService {
                 })
                 .sum();
             
-            log.info("多副本创建完成: {}/{} 成功", successCount, replicas.size());
+            log.info("多副本创建完成: fileSystemName={}, {}/{} 成功", fileSystemName, successCount, replicas.size());
             return (int) successCount;
             
         } catch (Exception e) {
-            log.error("等待创建完成异常", e);
+            log.error("等待创建完成异常: fileSystemName={}", fileSystemName, e);
             return 0;
         }
     }
     
     /**
      * 向DataServer写入文件数据
+     * @param fileSystemName 文件系统名称
      * @param dataServer 选中的DataServer
      * @param path 文件路径
      * @param offset 偏移量
@@ -201,7 +208,7 @@ public class DataServerClientService {
      * @param data 文件数据
      * @return 写入结果，包含副本位置信息
      */
-    public Map<String, Object> writeToDataServer(Object dataServer, String path, int offset, int length, byte[] data) {
+    public Map<String, Object> writeToDataServer(String fileSystemName, Object dataServer, String path, int offset, int length, byte[] data) {
         try {
             // 从dataServer对象中提取地址信息
             String dsAddress = extractDataServerAddress(dataServer);
@@ -213,6 +220,7 @@ public class DataServerClientService {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
+            headers.set("fileSystemName", fileSystemName);
             
             // 构建请求参数
             String queryParams = String.format("?path=%s&offset=%d&length=%d", path, offset, length);
@@ -227,13 +235,13 @@ public class DataServerClientService {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 String body = response.getBody();
                 Map<String, Object> result = new ObjectMapper().readValue(body, Map.class);
-                log.info("成功在DataServer写入文件: {} -> {}, 副本位置: {}", 
-                         dsAddress, path, result.get("replicaLocations"));
+                log.info("成功在DataServer写入文件: fileSystemName={}, {} -> {}, 副本位置: {}", 
+                         fileSystemName, dsAddress, path, result.get("replicaLocations"));
                 dataServerStatus.put(dsAddress, true);
                 return result;
             } else {
-                log.error("在DataServer写入文件失败: {} -> {}, 状态码: {}", 
-                         dsAddress, path, response.getStatusCode());
+                log.error("在DataServer写入文件失败: fileSystemName={}, {} -> {}, 状态码: {}", 
+                         fileSystemName, dsAddress, path, response.getStatusCode());
                 Map<String, Object> errorResult = new HashMap<>();
                 errorResult.put("success", false);
                 errorResult.put("message", "写入失败，状态码: " + response.getStatusCode());
@@ -241,7 +249,7 @@ public class DataServerClientService {
             }
             
         } catch (Exception e) {
-            log.error("在DataServer写入文件异常: {} -> {}", path, e.getMessage(), e);
+            log.error("在DataServer写入文件异常: fileSystemName={}, path={}", fileSystemName, path, e.getMessage(), e);
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("success", false);
             errorResult.put("message", "写入异常: " + e.getMessage());
@@ -252,13 +260,14 @@ public class DataServerClientService {
     /**
      * 直接向指定 DataServer 写入数据，携带副本同步标记，避免被对端继续级联复制。
      */
-    public boolean writeDirectToDataServer(String dsAddress, String path, int offset, int length, byte[] data) {
+    public boolean writeDirectToDataServer(String dsAddress, String fileSystemName, String path, int offset, int length, byte[] data) {
         try {
             String url = "http://" + dsAddress + "/write";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
             headers.set("X-Is-Replica-Sync", "true");
+            headers.set("fileSystemName", fileSystemName);
 
             // 修复：避免重复编码，直接使用原始路径
             String queryParams = String.format("?path=%s&offset=%d&length=%d", path, offset, length);
@@ -274,7 +283,7 @@ public class DataServerClientService {
             }
             return ok;
         } catch (Exception e) {
-            log.error("直接写入DataServer失败: {} -> {}", dsAddress, path, e);
+            log.error("直接写入DataServer失败: fileSystemName={}, {} -> {}", fileSystemName, dsAddress, path, e);
             return false;
         }
     }
@@ -282,19 +291,22 @@ public class DataServerClientService {
     /**
      * 调用DataServer检查文件是否存在（检查第一个分块）
      */
-    public boolean checkFileExistsOnDataServer(String dsAddress, String path) {
+    public boolean checkFileExistsOnDataServer(String dsAddress, String fileSystemName, String path) {
         try {
             // 修复：避免重复编码，直接使用原始路径
             String url = "http://" + dsAddress + "/checkFileExists?path=" + path;
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
+            
             ResponseEntity<Boolean> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    HttpEntity.EMPTY,
+                    new HttpEntity<>(headers),
                     Boolean.class
             );
             return response.getStatusCode().is2xxSuccessful() && Boolean.TRUE.equals(response.getBody());
         } catch (Exception e) {
-            log.warn("检查副本是否存在失败: {} -> {}", dsAddress, path, e);
+            log.warn("检查副本是否存在失败: fileSystemName={}, {} -> {}", fileSystemName, dsAddress, path, e);
             return false;
         }
     }
@@ -302,14 +314,17 @@ public class DataServerClientService {
     /**
      * 从指定DataServer读取文件的全部数据（简化：服务端忽略offset/length，返回完整内容）
      */
-    public byte[] readFromDataServer(String dsAddress, String path) {
+    public byte[] readFromDataServer(String dsAddress, String fileSystemName, String path) {
         try {
             // 修复：避免重复编码，直接使用原始路径
             String url = "http://" + dsAddress + "/read?path=" + path + "&offset=0&length=-1";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("fileSystemName", fileSystemName);
+            
             ResponseEntity<byte[]> resp = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    HttpEntity.EMPTY,
+                    new HttpEntity<>(headers),
                     byte[].class
             );
             if (resp.getStatusCode().is2xxSuccessful()) {
@@ -317,7 +332,7 @@ public class DataServerClientService {
             }
             return null;
         } catch (Exception e) {
-            log.error("从DataServer读取文件失败: {} -> {}", dsAddress, path, e);
+            log.error("从DataServer读取文件失败: fileSystemName={}, {} -> {}", fileSystemName, dsAddress, path, e);
             return null;
         }
     }
@@ -325,12 +340,13 @@ public class DataServerClientService {
     /**
      * 将数据作为副本写入到指定DataServer（带副本同步标记，避免二次级联）
      */
-    public boolean writeReplicaToDataServer(String dsAddress, String path, byte[] data) {
+    public boolean writeReplicaToDataServer(String dsAddress, String fileSystemName, String path, byte[] data) {
         try {
             // 修复：避免重复编码，直接使用原始路径
             String url = "http://" + dsAddress + "/write?path=" + path + "&offset=0&length=" + (data == null ? 0 : data.length);
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Is-Replica-Sync", "true");
+            headers.set("fileSystemName", fileSystemName);
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM);
             ResponseEntity<String> response = restTemplate.exchange(
                     url,
@@ -340,7 +356,7 @@ public class DataServerClientService {
             );
             return response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
-            log.error("写入副本到DataServer失败: {} -> {}", dsAddress, path, e);
+            log.error("写入副本到DataServer失败: fileSystemName={}, {} -> {}", fileSystemName, dsAddress, path, e);
             return false;
         }
     }
@@ -348,13 +364,13 @@ public class DataServerClientService {
     /**
      * 在两个DataServer之间复制文件（源读取，目标写入为副本）
      */
-    public boolean replicateBetweenDataServers(String sourceAddress, String targetAddress, String path) {
-        byte[] data = readFromDataServer(sourceAddress, path);
+    public boolean replicateBetweenDataServers(String sourceAddress, String targetAddress, String fileSystemName, String path) {
+        byte[] data = readFromDataServer(sourceAddress, fileSystemName, path);
         if (data == null || data.length == 0) {
-            log.warn("源DataServer返回空数据，放弃复制: {} -> {} ({})", sourceAddress, targetAddress, path);
+            log.warn("源DataServer返回空数据，放弃复制: fileSystemName={}, {} -> {} ({})", fileSystemName, sourceAddress, targetAddress, path);
             return false;
         }
-        return writeReplicaToDataServer(targetAddress, path, data);
+        return writeReplicaToDataServer(targetAddress, fileSystemName, path, data);
     }
     
     /**
@@ -362,37 +378,29 @@ public class DataServerClientService {
      */
     private String extractDataServerAddress(Object dataServer) {
         if (dataServer instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> serverMap = (Map<String, Object>) dataServer;
-            // 优先使用已经拼好的address
-            Object address = serverMap.get("address");
+            Map<?, ?> map = (Map<?, ?>) dataServer;
+            Object address = map.get("address");
             if (address != null) {
-                return String.valueOf(address);
+                return address.toString();
             }
-            // 其次尝试host+port
-            String host = (String) serverMap.get("host");
-            Object port = serverMap.get("port");
-            if (host != null && port != null) {
-                return host + ":" + port.toString();
-            }
-            // 兼容旧字段ip+port
-            String ip = (String) serverMap.get("ip");
-            if (ip != null && port != null) {
-                return ip + ":" + port.toString();
-            }
+        } else if (dataServer instanceof String) {
+            return (String) dataServer;
         }
+        
+        log.warn("无法从dataServer对象中提取地址信息: {}", dataServer);
         return null;
     }
     
     /**
      * 从多个DataServer并发删除文件
+     * @param fileSystemName 文件系统名称
      * @param replicas 副本列表
      * @return 成功删除的副本数量
      */
-    public int deleteFromMultipleDataServers(List<ReplicaData> replicas) {
+    public int deleteFromMultipleDataServers(String fileSystemName, List<ReplicaData> replicas) {
         List<CompletableFuture<Boolean>> futures = replicas.stream()
             .map(replica -> CompletableFuture.supplyAsync(() -> 
-                deleteFileFromDataServer(replica), executorService))
+                deleteFileFromDataServer(fileSystemName, replica), executorService))
             .toList();
         
         // 等待所有删除完成
@@ -415,11 +423,11 @@ public class DataServerClientService {
                 })
                 .sum();
             
-            log.info("多副本删除完成: {}/{} 成功", successCount, replicas.size());
+            log.info("多副本删除完成: fileSystemName={}, {}/{} 成功", fileSystemName, successCount, replicas.size());
             return (int) successCount;
             
         } catch (Exception e) {
-            log.error("等待删除完成异常", e);
+            log.error("等待删除完成异常: fileSystemName={}", fileSystemName, e);
             return 0;
         }
     }

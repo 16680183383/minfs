@@ -55,8 +55,22 @@ public class FsckServices {
         Map<String, Object> results = new HashMap<>();
         
         try {
-            // 检查所有文件
-            List<StatInfo> allFiles = metaService.getAllFiles();
+            // 针对每个文件系统分别检查，确保复制时带上正确的fileSystemName
+            List<StatInfo> allFiles = new ArrayList<>();
+            if (metadataStorage != null) {
+                for (String fsName : metadataStorage.getAllFileSystemNames()) {
+                    try {
+                        List<StatInfo> list = metaService.getAllFiles(fsName);
+                        if (list != null) {
+                            // 在StatInfo上临时附加文件系统名（通过路径前缀或线程上下文传递不便，这里先走并行列表检查时携带fsName）
+                            // 直接合并列表；verifyAndHealReplicas内会再次根据当前循环的fsName调用
+                            allFiles.addAll(list);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                allFiles = metaService.getAllFiles();
+            }
             int totalFiles = allFiles.size();
             int orphanedFiles = 0;
             int repairedFiles = 0;
@@ -110,6 +124,20 @@ public class FsckServices {
      */
     private boolean verifyAndHealReplicas(StatInfo statInfo) {
         boolean changed = false;
+        // 确定文件所属文件系统名称
+        String fileSystemName = null;
+        for (String fsName : metadataStorage.getAllFileSystemNames()) {
+            try {
+                if (metadataStorage.exists(fsName, statInfo.getPath())) {
+                    fileSystemName = fsName;
+                    break;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (fileSystemName == null) {
+            log.warn("无法确定文件所属的文件系统，跳过校验与自愈: {}", statInfo.getPath());
+            return false;
+        }
         List<ReplicaData> replicas = statInfo.getReplicaData();
         if (replicas == null) {
             replicas = new ArrayList<>();
@@ -120,7 +148,7 @@ public class FsckServices {
             String ds = r.dsNode; // 形如 ip:port
             boolean exists = false;
             try {
-                exists = dataServerClientService.checkFileExistsOnDataServer(ds, statInfo.getPath());
+                exists = dataServerClientService.checkFileExistsOnDataServer(ds, fileSystemName, statInfo.getPath());
             } catch (Exception e) {
                 log.warn("副本健康检查失败：{} -> {}", ds, statInfo.getPath(), e);
             }
@@ -150,7 +178,7 @@ public class FsckServices {
                 List<String> targets = chooseTargetDataServers(used, need);
                 for (String target : targets) {
                     try {
-                        boolean ok = dataServerClientService.replicateBetweenDataServers(source.dsNode, target, statInfo.getPath());
+                        boolean ok = dataServerClientService.replicateBetweenDataServers(source.dsNode, target, fileSystemName, statInfo.getPath());
                         if (ok) {
                             ReplicaData nr = new ReplicaData();
                             nr.id = java.util.UUID.randomUUID().toString();
@@ -179,7 +207,7 @@ public class FsckServices {
         }
 
         // 4) 清理历史脏数据：在未分配该文件副本的DataServer上，如果仍残留数据则删除
-        int staleDeleted = cleanupStaleReplicasNotInMetadata(statInfo, validReplicas);
+        int staleDeleted = cleanupStaleReplicasNotInMetadata(fileSystemName, statInfo, validReplicas);
         if (staleDeleted > 0) {
             log.info("清理历史脏副本: {} 个 ({})", staleDeleted, statInfo.getPath());
         }
@@ -187,7 +215,7 @@ public class FsckServices {
         // 5) 如有变化则更新元数据
         if (changed) {
             statInfo.setReplicaData(validReplicas);
-            metadataStorage.saveMetadata(statInfo.getPath(), statInfo);
+            metadataStorage.saveMetadata(fileSystemName, statInfo.getPath(), statInfo);
         }
         return changed;
     }
@@ -222,7 +250,16 @@ public class FsckServices {
         int removedCount = 0;
         for (ReplicaData r : toRemove) {
             try {
-                boolean ok = dataServerClientService.deleteFileFromDataServer(r);
+                // 确定文件系统名
+                String fsName = null;
+                for (String n : metadataStorage.getAllFileSystemNames()) {
+                    if (metadataStorage.exists(n, statInfo.getPath())) { fsName = n; break; }
+                }
+                if (fsName == null) {
+                    log.warn("无法确定文件所属的文件系统，跳过删除副本: {}", statInfo.getPath());
+                    continue;
+                }
+                boolean ok = dataServerClientService.deleteFileFromDataServer(fsName, r);
                 if (ok) removedCount++;
                 log.info("过副本清理，删除副本: {} -> {} 成功={} ", r.dsNode, statInfo.getPath(), ok);
             } catch (Exception e) {
@@ -242,7 +279,7 @@ public class FsckServices {
      * 历史脏数据清理：对于当前元数据未分配该文件副本的活跃DataServer，如存在该文件数据则删除。
      * 返回清理数量。
      */
-    private int cleanupStaleReplicasNotInMetadata(StatInfo statInfo, List<ReplicaData> currentReplicas) {
+    private int cleanupStaleReplicasNotInMetadata(String fileSystemName, StatInfo statInfo, List<ReplicaData> currentReplicas) {
         try {
             Set<String> assigned = new HashSet<>();
             if (currentReplicas != null) {
@@ -257,7 +294,7 @@ public class FsckServices {
                 if (assigned.contains(addr)) continue; // 该节点是被分配副本的，跳过
                 boolean exists = false;
                 try {
-                    exists = dataServerClientService.checkFileExistsOnDataServer(addr, statInfo.getPath());
+                    exists = dataServerClientService.checkFileExistsOnDataServer(addr, fileSystemName, statInfo.getPath());
                 } catch (Exception e) {
                     // 忽略探测异常
                 }
@@ -265,7 +302,7 @@ public class FsckServices {
                     ReplicaData temp = new ReplicaData();
                     temp.dsNode = addr;
                     temp.path = statInfo.getPath();
-                    boolean ok = dataServerClientService.deleteFileFromDataServer(temp);
+                    boolean ok = dataServerClientService.deleteFileFromDataServer(fileSystemName, temp);
                     if (ok) cleaned++;
                     log.info("清理历史脏副本: {} -> {} 成功={} ", addr, statInfo.getPath(), ok);
                 }

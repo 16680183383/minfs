@@ -300,6 +300,20 @@ public class ZkMetaServerService implements ApplicationRunner {
         return followerAddresses;
     }
     
+    /**
+     * 获取ZK连接状态
+     */
+    public boolean isZkConnected() {
+        return zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED;
+    }
+    
+    /**
+     * 获取ZK实例
+     */
+    public ZooKeeper getZooKeeper() {
+        return zooKeeper;
+    }
+    
     @PreDestroy
     public void destroy() {
         isRunning.set(false);

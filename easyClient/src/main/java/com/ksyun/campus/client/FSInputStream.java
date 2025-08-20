@@ -1,5 +1,6 @@
 package com.ksyun.campus.client;
 
+import com.ksyun.campus.client.domain.MetaServerMsg;
 import com.ksyun.campus.client.domain.ReplicaData;
 import com.ksyun.campus.client.domain.StatInfo;
 import com.ksyun.campus.client.util.HttpClientUtil;
@@ -50,25 +51,22 @@ public class FSInputStream extends InputStream {
                 throw new IOException("文件路径为空");
             }
             
-            // 检查文件大小
+            // 若元数据 size==0，直接返回空内容（按你的要求保留早退逻辑）
             if (statInfo.getSize() == 0) {
-                // 文件大小为0，设置空数据
                 fileData = new byte[0];
                 dataLoaded = true;
                 return;
             }
             
             // 从MetaServer读取文件数据（支持分块读取）
-            String metaServerAddress = fileSystem.getMetaServerAddress();
-            if (metaServerAddress == null || metaServerAddress.trim().isEmpty()) {
-                throw new IOException("无法获取MetaServer地址");
-            }
+            MetaServerMsg metaServer = fileSystem.getMetaServer();
+            String url = "http://" + metaServer.getHost() + ":" + metaServer.getPort() + "/read";
             
-            String url = "http://" + metaServerAddress + "/read?path=" + 
-                        java.net.URLEncoder.encode(statInfo.getPath(), "UTF-8") +
-                        "&offset=0&length=-1"; // 读取整个文件
+            String queryParams = "?path=" + java.net.URLEncoder.encode(statInfo.getPath(), "UTF-8") + "&offset=0&length=-1";
+            String fullUrl = url + queryParams;
             
-            String response = HttpClientUtil.doGet(httpClient, url);
+            // 添加文件系统名称到请求头
+            String response = HttpClientUtil.doGetWithHeader(httpClient, fullUrl, "fileSystemName", fileSystem.getFileSystemName());
             if (response == null) {
                 throw new IOException("从MetaServer读取文件失败: 响应为空");
             }

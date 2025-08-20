@@ -23,6 +23,8 @@ public class ZkDataServerService {
     
     private ZooKeeper zooKeeper;
     private final Map<String, Map<String, Object>> dataServers = new ConcurrentHashMap<>();
+    // 记录每个 DataServer 节点上次的原始数据（字符串），用于判断是否真正变化
+    private final Map<String, String> dataServerLastData = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private String dataServerPath;
     
@@ -105,14 +107,22 @@ public class ZkDataServerService {
                 @Override
                 public void process(WatchedEvent event) {
                     if (event.getType() == Event.EventType.NodeDataChanged) {
-                        log.info("检测到DataServer {} 数据变化，重新加载...", serverId);
                         try {
                             // 重新加载该DataServer的数据
                             byte[] data = zooKeeper.getData(dataServerPath + "/" + serverId, false, null);
                             String serverInfo = data != null ? new String(data) : "";
+                            // 与上次原始数据比较，完全一致则不打印日志
+                            String prev = dataServerLastData.get(serverId);
+                            boolean changed = !java.util.Objects.equals(prev, serverInfo);
                             Map<String, Object> server = parseServerInfo(serverId, serverInfo);
                             dataServers.put(serverId, server);
-                            log.info("DataServer {} 数据更新: {}", serverId, serverInfo);
+                            // 更新缓存
+                            dataServerLastData.put(serverId, serverInfo);
+                            if (changed) {
+                                log.info("DataServer {} 数据更新: {}", serverId, serverInfo);
+                            } else {
+                                log.debug("DataServer {} 数据内容未变，跳过日志", serverId);
+                            }
                             
                             // 重新设置监听
                             watchDataServerData(dataServerPath, serverId);
@@ -193,6 +203,8 @@ public class ZkDataServerService {
                     String serverInfo = data != null ? new String(data) : "";
                     Map<String, Object> server = parseServerInfo(child, serverInfo);
                     dataServers.put(child, server);
+                    // 初始化原始数据缓存，避免首次加载后立即触发相同内容的重复日志
+                    dataServerLastData.put(child, serverInfo);
                     log.info("加载数据服务器: {} -> {}", child, serverInfo.isEmpty() ? "(no data)" : serverInfo);
                     
                     // 为每个DataServer设置数据变化监听

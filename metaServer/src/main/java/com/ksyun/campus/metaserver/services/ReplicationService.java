@@ -49,6 +49,7 @@ public class ReplicationService {
 				for (Map<String, Object> f : files) {
 					String path = String.valueOf(f.get("path"));
 					String type = String.valueOf(f.get("type"));
+					String fileSystemName = String.valueOf(f.getOrDefault("fileSystemName", "default"));
 					Number sizeNum = (Number) f.getOrDefault("size", 0);
 					StatInfo info = new StatInfo();
 					info.setPath(path);
@@ -79,14 +80,15 @@ public class ReplicationService {
 							filesWithReplicas++;
 						}
 					}
-					metadataStorageService.saveMetadata(path, info);
-					snapshotPaths.add(path);
+					metadataStorageService.saveMetadata(fileSystemName, path, info);
+					snapshotPaths.add(fileSystemName + ":" + path);
 				}
 				// 删除本地存在但不在快照中的路径
 				List<StatInfo> localAll = metadataStorageService.getAllMetadata();
 				for (StatInfo s : localAll) {
-					if (!snapshotPaths.contains(s.getPath())) {
-						metadataStorageService.deleteMetadata(s.getPath());
+					String key = "default:" + s.getPath(); // 默认文件系统
+					if (!snapshotPaths.contains(key)) {
+						metadataStorageService.deleteMetadata("default", s.getPath());
 					}
 				}
 				log.info("快照同步完成，共 {} 条，其中包含副本信息的文件: {}", ((List<?>) list).size(), filesWithReplicas);
@@ -104,7 +106,9 @@ public class ReplicationService {
 			}
 			List<Map<String, Object>> metas = zkMetaServerService.getAllMetaServers();
 			Map<String, Object> selfInfo = zkMetaServerService.getCurrentMetaServerInfo();
-			String self = selfInfo.get("host") + ":" + selfInfo.get("port");
+			String self = (selfInfo.get("host") != null && selfInfo.get("port") != null)
+					? selfInfo.get("host") + ":" + selfInfo.get("port")
+					: String.valueOf(selfInfo.get("address"));
 			List<String> followers = metas.stream()
 					.filter(m -> !self.equals(String.valueOf(m.get("address"))))
 					.map(m -> String.valueOf(m.get("address")))
@@ -122,6 +126,7 @@ public class ReplicationService {
 	// 被动接收复制（由Follower调用）
 	public boolean applyReplication(ReplicationType type, String path, Map<String, Object> payload) {
 		try {
+			String fileSystemName = String.valueOf(payload.getOrDefault("fileSystemName", "default"));
 			switch (type) {
 				case CREATE_FILE -> {
 					StatInfo info = new StatInfo();
@@ -129,7 +134,7 @@ public class ReplicationService {
 					info.setType(FileType.File);
 					info.setSize(((Number) payload.getOrDefault("size", 0)).longValue());
 					info.setMtime(System.currentTimeMillis());
-					metadataStorageService.saveMetadata(path, info);
+					metadataStorageService.saveMetadata(fileSystemName, path, info);
 				}
 				case CREATE_DIR -> {
 					StatInfo info = new StatInfo();
@@ -137,10 +142,10 @@ public class ReplicationService {
 					info.setType(FileType.Directory);
 					info.setSize(0);
 					info.setMtime(System.currentTimeMillis());
-					metadataStorageService.saveMetadata(path, info);
+					metadataStorageService.saveMetadata(fileSystemName, path, info);
 				}
 				case WRITE -> {
-					StatInfo existing = metadataStorageService.getMetadata(path);
+					StatInfo existing = metadataStorageService.getMetadata(fileSystemName, path);
 					if (existing == null) {
 						existing = new StatInfo();
 						existing.setPath(path);
@@ -170,21 +175,21 @@ public class ReplicationService {
 						}
 						existing.setReplicaData(replicaDataList);
 					}
-					metadataStorageService.saveMetadata(path, existing);
+					metadataStorageService.saveMetadata(fileSystemName, path, existing);
 				}
 				case DELETE -> {
-					StatInfo existing = metadataStorageService.getMetadata(path);
+					StatInfo existing = metadataStorageService.getMetadata(fileSystemName, path);
 					if (existing == null) {
-						List<StatInfo> children = metadataStorageService.listDirectory(path);
+						List<StatInfo> children = metadataStorageService.listDirectory(fileSystemName, path);
 						if (children != null && !children.isEmpty()) {
-							deleteDirectoryRecursively(path);
+							deleteDirectoryRecursively(fileSystemName, path);
 						} else {
-							metadataStorageService.deleteMetadata(path);
+							metadataStorageService.deleteMetadata(fileSystemName, path);
 						}
 					} else if (existing.getType() == FileType.Directory) {
-						deleteDirectoryRecursively(path);
+						deleteDirectoryRecursively(fileSystemName, path);
 					} else {
-						metadataStorageService.deleteMetadata(path);
+						metadataStorageService.deleteMetadata(fileSystemName, path);
 					}
 				}
 				// 去除RENAME分支
@@ -198,17 +203,17 @@ public class ReplicationService {
 		}
 	}
 
-	private void deleteDirectoryRecursively(String dirPath) {
-		List<StatInfo> children = metadataStorageService.listDirectory(dirPath);
+	private void deleteDirectoryRecursively(String fileSystemName, String dirPath) {
+		List<StatInfo> children = metadataStorageService.listDirectory(fileSystemName, dirPath);
 		for (StatInfo child : children) {
 			String childPath = child.getPath();
 			if (child.getType() == FileType.Directory) {
-				deleteDirectoryRecursively(childPath);
+				deleteDirectoryRecursively(fileSystemName, childPath);
 			} else {
-				metadataStorageService.deleteMetadata(childPath);
+				metadataStorageService.deleteMetadata(fileSystemName, childPath);
 			}
 		}
-		metadataStorageService.deleteMetadata(dirPath);
+		metadataStorageService.deleteMetadata(fileSystemName, dirPath);
 	}
 }
 

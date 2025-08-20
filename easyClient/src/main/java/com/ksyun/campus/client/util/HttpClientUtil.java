@@ -77,11 +77,38 @@ public class HttpClientUtil {
     }
     
     /**
+     * 执行带请求头的GET请求
+     */
+    public static String doGetWithHeader(HttpClient client, String url, String headerName, String headerValue) throws IOException, ParseException {
+        ClassicHttpRequest request = ClassicRequestBuilder.get(url)
+                .addHeader(headerName, headerValue)
+                .build();
+        try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
+            HttpEntity entity = response.getEntity();
+            return entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : null;
+        }
+    }
+    
+    /**
      * 执行POST请求，发送字节数组
      */
     public static String doPost(HttpClient client, String url, byte[] data) throws IOException, ParseException {
         ClassicHttpRequest request = ClassicRequestBuilder.post(url)
                 .setEntity(new ByteArrayEntity(data, null))
+                .build();
+        try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
+            HttpEntity entity = response.getEntity();
+            return entity != null ? EntityUtils.toString(entity, StandardCharsets.UTF_8) : null;
+        }
+    }
+    
+    /**
+     * 执行带请求头的POST请求，发送字节数组
+     */
+    public static String doPostWithHeader(HttpClient client, String url, byte[] data, String headerName, String headerValue) throws IOException, ParseException {
+        ClassicHttpRequest request = ClassicRequestBuilder.post(url)
+                .setEntity(new ByteArrayEntity(data, null))
+                .addHeader(headerName, headerValue)
                 .build();
         try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
             HttpEntity entity = response.getEntity();

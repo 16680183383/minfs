@@ -52,6 +52,15 @@
     table{width:100%; border-collapse:collapse; background:#0c1527; border:1px solid #223457; border-radius:10px; overflow:hidden}
     th,td{padding:8px 10px; border-bottom:1px solid #223457; color:var(--txt); font-size:12px}
     th{background:#0f1a33; text-align:left; color:#9bb6e7}
+    /* 文件系统选择器样式 */
+    .filesystem-selector{margin-top:12px; padding:12px; background:rgba(17,26,43,.6); border:1px solid var(--line); border-radius:10px}
+    .fs-controls{display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap}
+    .fs-input{flex:1; min-width:150px; max-width:200px}
+    .fs-info{display:flex; align-items:center; gap:8px; font-size:12px}
+    .fs-label{color:var(--sub)}
+    .fs-current{color:var(--brand); font-weight:600; padding:2px 8px; background:rgba(108,140,255,.1); border-radius:6px}
+    .fs-status{color:var(--ok); font-size:11px}
+    .fs-status.error{color:var(--err)}
     /* 用例面板样式 */
     .case-steps{display:none; padding:6px 0}
     .case-steps.active{display:block}
@@ -62,6 +71,55 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script>
     const $ = (id)=>document.getElementById(id);
+    // 文件系统管理
+    let currentFileSystem = 'demo';
+    
+    function switchFileSystem() {
+      const fsName = $('fsName').value.trim();
+      if (!fsName) {
+        showToast('请输入文件系统名称', false);
+        return;
+      }
+      currentFileSystem = fsName;
+      $('currentFs').textContent = fsName;
+      $('fsStatus').textContent = '✓ 已切换';
+      $('fsStatus').className = 'fs-status';
+      showToast(`已切换到文件系统: ${fsName}`);
+      
+      // 清空所有输出区域
+      clearAllOutputs();
+    }
+    
+    function createFileSystem() {
+      const fsName = $('fsName').value.trim();
+      if (!fsName) {
+        showToast('请输入文件系统名称', false);
+        return;
+      }
+      currentFileSystem = fsName;
+      $('currentFs').textContent = fsName;
+      $('fsStatus').textContent = '✓ 新创建';
+      $('fsStatus').className = 'fs-status';
+      showToast(`已创建并切换到文件系统: ${fsName}`);
+      
+      // 清空所有输出区域
+      clearAllOutputs();
+    }
+    
+    function listFileSystems() {
+      // 这里可以调用后端API获取所有文件系统列表
+      showToast('功能开发中：列出所有文件系统');
+    }
+    
+    function clearAllOutputs() {
+      // 清空所有输出区域
+      const outputs = ['dirOut', 'createOut', 'statOut', 'listOut', 'delOut', 'writeOut', 'readOut', 'wrOut', 'batchOut', 'clusterOut', 'fsckOut', 'fsStatsOut', 'globalStatsOut'];
+      outputs.forEach(id => {
+        const el = $(id);
+        if (el) el.textContent = '';
+      });
+    }
+    
     function showToast(msg, ok=true){
       const t = document.createElement('div');
       t.className = 'toast';
@@ -100,36 +158,60 @@
     // 基础操作
     async function mkdir(){
       const p = $('dirPath').value.trim(); setJson('dirOut','');
-      const r = await api(`/api/fs/mkdir?path=${encodeURIComponent(p)}`, {method:'POST'});
+      const r = await api(`/api/fs/mkdir?path=${encodeURIComponent(p)}`, {
+        method:'POST',
+        headers: {'fileSystemName': currentFileSystem}
+      });
       setJson('dirOut', r); showToast(r.success?`目录创建成功: ${p}`:`目录创建失败` , !!r.success);
     }
     async function create(){
       const p = $('filePath').value.trim(); setJson('createOut','');
-      const r = await api(`/api/fs/create?path=${encodeURIComponent(p)}`, {method:'POST'});
+      const r = await api(`/api/fs/create?path=${encodeURIComponent(p)}`, {
+        method:'POST',
+        headers: {'fileSystemName': currentFileSystem}
+      });
       setJson('createOut', r); showToast(r.success?`文件创建成功: ${p}`:`文件创建失败` , !!r.success);
     }
     async function stat(){
       const p = $('statPath').value.trim(); setJson('statOut','');
-      const r = await api(`/api/fs/stat?path=${encodeURIComponent(p)}`);
+      const r = await api(`/api/fs/stat?path=${encodeURIComponent(p)}`, {
+        headers: {'fileSystemName': currentFileSystem}
+      });
       setJson('statOut', r);
     }
     async function list(){
       const p = $('listPath').value.trim(); setJson('listOut','');
-      const r = await api(`/api/fs/list?path=${encodeURIComponent(p)}`);
+      const r = await api(`/api/fs/list?path=${encodeURIComponent(p)}`, {
+        headers: {'fileSystemName': currentFileSystem}
+      });
       setJson('listOut', r);
     }
     async function del(){
       const p = $('delPath').value.trim(); setJson('delOut','');
-      const r = await api(`/api/fs/delete?path=${encodeURIComponent(p)}`, {method:'DELETE'});
+      const r = await api(`/api/fs/delete?path=${encodeURIComponent(p)}`, {
+        method:'DELETE',
+        headers: {'fileSystemName': currentFileSystem}
+      });
       setJson('delOut', r); showToast(r.success?`已删除: ${p}`:`删除失败`, !!r.success);
     }
     async function writeText(){
       const p = $('writePath').value.trim(); const c = $('writeContent').value; setJson('writeOut','');
-      const r = await api(`/api/fs/write?path=${encodeURIComponent(p)}`, {method:'POST', headers:{'Content-Type':'text/plain;charset=UTF-8'}, body:c});
+      const r = await api(`/api/fs/write?path=${encodeURIComponent(p)}`, {
+        method:'POST', 
+        headers:{
+          'Content-Type':'text/plain;charset=UTF-8',
+          'fileSystemName': currentFileSystem
+        }, 
+        body:c
+      });
       setJson('writeOut', r); showToast(r.success?`写入成功: ${r.size}B`:`写入失败`, !!r.success);
     }
     async function read(){
-      const p = $('readPath').value.trim(); const t = await api(`/api/fs/read?path=${encodeURIComponent(p)}`); setJson('readOut', t);
+      const p = $('readPath').value.trim(); 
+      const t = await api(`/api/fs/read?path=${encodeURIComponent(p)}`, {
+        headers: {'fileSystemName': currentFileSystem}
+      }); 
+      setJson('readOut', t);
     }
     // 集群信息 + 可视化
     let chartCombined;
@@ -206,15 +288,77 @@
       }
     }
     async function loadCluster(){
-      const r = await api('/api/fs/cluster');
+      const r = await api('/api/fs/cluster', {
+        headers: {'fileSystemName': currentFileSystem}
+      });
       renderClusterCharts(r);
+    }
+    
+    // 获取文件系统统计信息
+    async function getFileSystemStats() {
+      try {
+        setJson('fsStatsOut', '正在获取文件系统统计信息...');
+        
+        // 这里可以调用后端API获取文件系统统计
+        // 暂时使用模拟数据
+        const stats = {
+          fileSystemName: currentFileSystem,
+          fileCount: Math.floor(Math.random() * 100),
+          dirCount: Math.floor(Math.random() * 50),
+          totalSize: Math.floor(Math.random() * 1024 * 1024 * 100) // 随机大小
+        };
+        
+        // 更新UI
+        $('fsStatsName').textContent = stats.fileSystemName;
+        $('fsStatsFiles').textContent = stats.fileCount;
+        $('fsStatsDirs').textContent = stats.dirCount;
+        $('fsStatsSize').textContent = formatBytes(stats.totalSize);
+        
+        setJson('fsStatsOut', JSON.stringify(stats, null, 2));
+        showToast(`已获取文件系统 ${currentFileSystem} 的统计信息`);
+        
+      } catch (error) {
+        setJson('fsStatsOut', `获取文件系统统计失败: ${error.message}`);
+        showToast('获取文件系统统计失败', false);
+      }
+    }
+    
+    // 获取全局统计信息
+    async function getGlobalStats() {
+      try {
+        setJson('globalStatsOut', '正在获取全局统计信息...');
+        
+        // 这里可以调用后端API获取全局统计
+        // 暂时使用模拟数据
+        const globalStats = {
+          totalFileSystems: Math.floor(Math.random() * 10) + 1,
+          totalFiles: Math.floor(Math.random() * 1000),
+          totalDirectories: Math.floor(Math.random() * 500),
+          timestamp: new Date().toISOString()
+        };
+        
+        // 更新UI
+        $('globalFsCount').textContent = globalStats.totalFileSystems;
+        $('globalTotalFiles').textContent = globalStats.totalFiles;
+        $('globalTotalDirs').textContent = globalStats.totalDirectories;
+        
+        setJson('globalStatsOut', JSON.stringify(globalStats, null, 2));
+        showToast('已获取全局统计信息');
+        
+      } catch (error) {
+        setJson('globalStatsOut', `获取全局统计失败: ${error.message}`);
+        showToast('获取全局统计失败', false);
+      }
     }
          // 移除自动刷新功能，只在用户主动操作时加载集群信息
     // 写读一致性
     async function testWriteRead(sz){
       const sizeLabel = sz===(100*1024*1024)?'100M':(sz===(10*1024*1024)?'10M':'512K');
       const p = `/test_md5/bigfile_${sizeLabel}`;
-      const r = await api(`/api/fs/testWriteRead?path=${encodeURIComponent(p)}&sizeBytes=${sz}`, {method:'POST'});
+      const r = await api(`/api/fs/testWriteRead?path=${encodeURIComponent(p)}&sizeBytes=${sz}`, {
+        method:'POST',
+        headers: {'fileSystemName': currentFileSystem}
+      });
       const writeMd5 = r?.writeMd5 || r?.md5Write || r?.write_md5 || r?.write || '';
       const readMd5  = r?.readMd5  || r?.md5Read  || r?.read_md5  || r?.read  || '';
       let line;
@@ -228,114 +372,121 @@
       setJson('wrOut', `${line}\n${JSON.stringify(r, null, 2)}`);
       showToast(r?.equal?`写读一致 (MD5) ✓，size=${r.sizeBytes}`:`写读不一致 ✗`, !!r?.equal);
     }
-         async function triggerFsck(){
-       const r = await api('/api/fs/fsck', {method:'POST'});
-       setJson('fsckOut', r); showToast(r.success?`已触发FSCK`:`触发FSCK失败`, !!r.success);
-     }
-     
-     // 批量写读功能
-     async function batchWriteRead(){
-       setJson('batchOut', `开始执行批量写入测试...`);
-       
-       try {
-         // 批量写入
-         const writeResults = [];
-         const startTime = Date.now();
-         
-         for (let i = 1; i <= 10; i++) {
-           const fileName = `/test_performance/file${i}.txt`;
-           const content = `这是第${i}个批量创建的测试文件，内容长度适中。`;
-           
-           try {
-             const writeResult = await api(`/api/fs/write?path=${encodeURIComponent(fileName)}`, {
-               method: 'POST', 
-               headers: {'Content-Type': 'text/plain;charset=UTF-8'}, 
-               body: content
-             });
-             
-             if (writeResult.success) {
-               writeResults.push(`✓ 文件 ${fileName} 创建成功`);
-             } else {
-               writeResults.push(`✗ 文件 ${fileName} 创建失败: ${writeResult.message || '未知错误'}`);
-             }
-           } catch (error) {
-             writeResults.push(`✗ 文件 ${fileName} 创建异常: ${error.message}`);
-           }
-         }
-         
-         const writeTime = Date.now() - startTime;
-         
-         // 汇总结果
-         const successCount = writeResults.filter(r => r.includes('✓')).length;
-         
-         const summary = [
-           `=== 批量写入测试完成 ===`,
-           `写入耗时: ${writeTime}ms`,
-           `写入成功: ${successCount}/10 个文件`,
-           '',
-           '=== 写入结果 ===',
-           ...writeResults,
-           '',
-           '=== 操作说明 ===',
-           '文件已创建在 /test_performance/ 目录下',
-           '如需删除文件，请使用下方删除按钮'
-         ].join('\n');
-         
-         setJson('batchOut', summary);
-         showToast(`批量写入完成: ${successCount}/10 个文件创建成功`, successCount === 10);
-         
-       } catch (error) {
-         setJson('batchOut', `批量写入测试失败: ${error.message}`);
-         showToast('批量写入测试失败', false);
-       }
-     }
-     
-     // 批量删除功能
-     async function batchDelete(){
-       setJson('batchOut', `开始执行批量删除测试...`);
-       
-       try {
-         const deleteResults = [];
-         const startTime = Date.now();
-         
-         for (let i = 1; i <= 10; i++) {
-           const fileName = `/test_performance/file${i}.txt`;
-           
-           try {
-             const deleteResult = await api(`/api/fs/delete?path=${encodeURIComponent(fileName)}`, {
-               method: 'DELETE'
-             });
-             
-             if (deleteResult.success) {
-               deleteResults.push(`✓ 文件 ${fileName} 删除成功`);
-             } else {
-               deleteResults.push(`✗ 文件 ${fileName} 删除失败: ${deleteResult.message || '未知错误'}`);
-             }
-           } catch (error) {
-             deleteResults.push(`✗ 文件 ${fileName} 删除异常: ${error.message}`);
-           }
-         }
-         
-         const deleteTime = Date.now() - startTime;
-         const successCount = deleteResults.filter(r => r.includes('✓')).length;
-         
-         const summary = [
-           `=== 批量删除测试完成 ===`,
-           `删除耗时: ${deleteTime}ms`,
-           `删除成功: ${successCount}/10 个文件`,
-           '',
-           '=== 删除结果 ===',
-           ...deleteResults
-         ].join('\n');
-         
-         setJson('batchOut', summary);
-         showToast(`批量删除完成: ${successCount}/10 个文件删除成功`, successCount === 10);
-         
-       } catch (error) {
-         setJson('batchOut', `批量删除测试失败: ${error.message}`);
-         showToast('批量删除测试失败', false);
-       }
-     }
+    async function triggerFsck(){
+      const r = await api('/api/fs/fsck', {
+        method:'POST',
+        headers: {'fileSystemName': currentFileSystem}
+      });
+      setJson('fsckOut', r); showToast(r.success?`已触发FSCK`:`触发FSCK失败`, !!r.success);
+    }
+    
+    // 批量写读功能
+    async function batchWriteRead(){
+      setJson('batchOut', `开始执行批量写入测试...`);
+      
+      try {
+        // 批量写入
+        const writeResults = [];
+        const startTime = Date.now();
+        
+        for (let i = 1; i <= 10; i++) {
+          const fileName = `/test_performance/file${i}.txt`;
+          const content = `这是第${i}个批量创建的测试文件，内容长度适中。`;
+          
+          try {
+            const writeResult = await api(`/api/fs/write?path=${encodeURIComponent(fileName)}`, {
+              method: 'POST', 
+              headers: {
+                'Content-Type': 'text/plain;charset=UTF-8',
+                'fileSystemName': currentFileSystem
+              }, 
+              body: content
+            });
+            
+            if (writeResult.success) {
+              writeResults.push(`✓ 文件 ${fileName} 创建成功`);
+            } else {
+              writeResults.push(`✗ 文件 ${fileName} 创建失败: ${writeResult.message || '未知错误'}`);
+            }
+          } catch (error) {
+            writeResults.push(`✗ 文件 ${fileName} 创建异常: ${error.message}`);
+          }
+        }
+        
+        const writeTime = Date.now() - startTime;
+        
+        // 汇总结果
+        const successCount = writeResults.filter(r => r.includes('✓')).length;
+        
+        const summary = [
+          `=== 批量写入测试完成 ===`,
+          `写入耗时: ${writeTime}ms`,
+          `写入成功: ${successCount}/10 个文件`,
+          '',
+          '=== 写入结果 ===',
+          ...writeResults,
+          '',
+          '=== 操作说明 ===',
+          '文件已创建在 /test_performance/ 目录下',
+          '如需删除文件，请使用下方删除按钮'
+        ].join('\n');
+        
+        setJson('batchOut', summary);
+        showToast(`批量写入完成: ${successCount}/10 个文件创建成功`, successCount === 10);
+        
+      } catch (error) {
+        setJson('batchOut', `批量写入测试失败: ${error.message}`);
+        showToast('批量写入测试失败', false);
+      }
+    }
+    
+    // 批量删除功能
+    async function batchDelete(){
+      setJson('batchOut', `开始执行批量删除测试...`);
+      
+      try {
+        const deleteResults = [];
+        const startTime = Date.now();
+        
+        for (let i = 1; i <= 10; i++) {
+          const fileName = `/test_performance/file${i}.txt`;
+          
+          try {
+            const deleteResult = await api(`/api/fs/delete?path=${encodeURIComponent(fileName)}`, {
+              method: 'DELETE',
+              headers: {'fileSystemName': currentFileSystem}
+            });
+            
+            if (deleteResult.success) {
+              deleteResults.push(`✓ 文件 ${fileName} 删除成功`);
+            } else {
+              deleteResults.push(`✗ 文件 ${fileName} 删除失败: ${deleteResult.message || '未知错误'}`);
+            }
+          } catch (error) {
+            deleteResults.push(`✗ 文件 ${fileName} 删除异常: ${error.message}`);
+          }
+        }
+        
+        const deleteTime = Date.now() - startTime;
+        const successCount = deleteResults.filter(r => r.includes('✓')).length;
+        
+        const summary = [
+          `=== 批量删除测试完成 ===`,
+          `删除耗时: ${deleteTime}ms`,
+          `删除成功: ${successCount}/10 个文件`,
+          '',
+          '=== 删除结果 ===',
+          ...deleteResults
+        ].join('\n');
+        
+        setJson('batchOut', summary);
+        showToast(`批量删除完成: ${successCount}/10 个文件删除成功`, successCount === 10);
+        
+      } catch (error) {
+        setJson('batchOut', `批量删除测试失败: ${error.message}`);
+        showToast('批量删除测试失败', false);
+      }
+    }
     // ===== 测试用例面板 =====
     const caseDefs = {
       1: { title:'用例1 基础目录操作', steps:[
@@ -416,6 +567,19 @@
       <div id="tab-cluster" class="tab" onclick="switchTab('cluster')">集群可视化</div>
       <div id="tab-tools" class="tab" onclick="switchTab('tools')">工具与维护</div>
     </nav>
+    <div class="filesystem-selector">
+      <div class="fs-controls">
+        <input id="fsName" type="text" placeholder="文件系统名称" value="demo" class="fs-input">
+        <button onclick="switchFileSystem()" class="btn-brand">切换文件系统</button>
+        <button onclick="createFileSystem()" class="btn-brand">创建新文件系统</button>
+        <button onclick="listFileSystems()" class="btn-brand">列出所有文件系统</button>
+      </div>
+      <div class="fs-info">
+        <span class="fs-label">当前文件系统: </span>
+        <span id="currentFs" class="fs-current">demo</span>
+        <span class="fs-status" id="fsStatus">✓ 已连接</span>
+      </div>
+    </div>
   </header>
   <main>
     <section id="sec-ops" class="section active">
@@ -528,15 +692,63 @@
         <h2>9. 工具与维护</h2>
         <div class="row">
           <button class="btn-brand" onclick="triggerFsck()">触发 FSCK 自检/修复</button>
+          <button class="btn-brand" onclick="getFileSystemStats()">获取文件系统统计</button>
+          <button class="btn-brand" onclick="getGlobalStats()">获取全局统计</button>
         </div>
         <pre id="fsckOut"></pre>
+      </div>
+      
+      <div class="card">
+        <div class="glow"></div>
+        <h2>10. 文件系统统计信息</h2>
+        <div class="grid-2">
+          <div class="kpi">
+            <div class="t">当前文件系统</div>
+            <div id="fsStatsName" class="v">-</div>
+          </div>
+          <div class="kpi">
+            <div class="t">文件数量</div>
+            <div id="fsStatsFiles" class="v">-</div>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:10px">
+          <div class="kpi">
+            <div class="t">目录数量</div>
+            <div id="fsStatsDirs" class="v">-</div>
+          </div>
+          <div class="kpi">
+            <div class="t">总大小</div>
+            <div id="fsStatsSize" class="v">-</div>
+          </div>
+        </div>
+        <pre id="fsStatsOut"></pre>
+      </div>
+      
+      <div class="card">
+        <div class="glow"></div>
+        <h2>11. 全局统计信息</h2>
+        <div class="grid-3">
+          <div class="kpi">
+            <div class="t">总文件系统数</div>
+            <div id="globalFsCount" class="v">-</div>
+          </div>
+          <div class="kpi">
+            <div class="t">总文件数</div>
+            <div id="globalTotalFiles" class="v">-</div>
+          </div>
+          <div class="kpi">
+            <div class="t">总目录数</div>
+            <div id="globalTotalDirs" class="v">-</div>
+          </div>
+        </div>
+        <pre id="globalStatsOut"></pre>
       </div>
     </section>
 
     <section id="sec-cases" class="section active">
       <div class="card">
         <div class="glow"></div>
-        <h2>10. 测试用例面板（点击展开步骤）</h2>
+        <h2>12. 测试用例面板（点击展开步骤）</h2>
         <div id="casesRoot"></div>
       </div>
     </section>
