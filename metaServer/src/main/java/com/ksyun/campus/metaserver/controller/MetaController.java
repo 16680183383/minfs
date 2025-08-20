@@ -45,6 +45,9 @@ public class MetaController {
     @Autowired
     private org.springframework.web.client.RestTemplate restTemplate;
 
+    @Autowired
+    private org.springframework.context.ApplicationContext applicationContext;
+
     private java.net.URI buildLeaderUri(String leader, String path, String query) {
         try {
             return new java.net.URI("http://" + leader + path + (query == null ? "" : ("?" + query)));
@@ -956,4 +959,38 @@ public class MetaController {
             return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
         }
     }
+
+    @RequestMapping("shutdown")
+    public ResponseEntity<Map<String, Object>> shutdownServer(){
+        log.warn("收到关机请求，开始优雅停止MetaServer...");
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "shutting-down");
+        result.put("timestamp", System.currentTimeMillis());
+        try {
+            // 异步执行关闭，先返回响应，避免HTTP连接被中断
+            new Thread(() -> {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {}
+                try {
+                    if (applicationContext instanceof org.springframework.context.ConfigurableApplicationContext cac) {
+                        log.info("关闭Spring应用上下文...");
+                        cac.close(); // 触发 @PreDestroy 钩子（ZK、RocksDB等会安全关闭）
+                    }
+                } catch (Exception e) {
+                    log.error("关闭Spring应用上下文时发生异常", e);
+                } finally {
+                    log.info("进程退出");
+                    System.exit(0);
+                }
+            }, "MetaServer-Shutdown").start();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("发起优雅关机失败", e);
+            result.put("status", "error");
+            result.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(result);
+        }
+    }
+
 }

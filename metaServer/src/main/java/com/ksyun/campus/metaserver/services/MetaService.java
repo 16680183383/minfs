@@ -461,7 +461,7 @@ public class MetaService {
             
             // 确保容量字段存在
             if (!serverInfo.containsKey("totalCapacity")) {
-                serverInfo.put("totalCapacity", 1024 * 1024 * 1024L); // 1GB 默认值
+                serverInfo.put("totalCapacity", 2L * 1024 * 1024 * 1024); // 2GB 默认值
             }
             if (!serverInfo.containsKey("usedCapacity")) {
                 serverInfo.put("usedCapacity", 0L);
