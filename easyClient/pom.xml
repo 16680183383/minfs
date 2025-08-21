@@ -85,11 +85,11 @@
                     </descriptorRefs>
                     <finalName>easyClient-1.0</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.ksyun.campus.client.test.EasyClientTestRunner</mainClass>
-                        </manifest>
-                    </archive>
+                                <archive>
+                <manifest>
+                    <!-- 不指定主类，作为库JAR包使用 -->
+                </manifest>
+            </archive>
                 </configuration>
                 <executions>
                     <execution>
@@ -100,6 +100,17 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            
+            <!-- Maven Exec插件 - 直接运行Java程序 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.ksyun.campus.client.test.CommandLineTester</mainClass>
+                    <cleanupDaemonThreads>false</cleanupDaemonThreads>
+                </configuration>
             </plugin>
         </plugins>
     </build>
