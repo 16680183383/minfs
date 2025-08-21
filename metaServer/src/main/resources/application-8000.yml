@@ -34,10 +34,10 @@ logging:
 metadata:
   storage:
     type: rocksdb
-    path: ./data/metaserver-8000/rocksdb
+    path: /data/apps/minfs/metaserver-8000/rocksdb
     backup:
       enabled: true
-      path: ./data/metaserver-8000/backup
+      path: /data/apps/minfs/metaserver-8000/backup
       interval: 300000  # 5分钟备份间隔
 
 # 集群配置

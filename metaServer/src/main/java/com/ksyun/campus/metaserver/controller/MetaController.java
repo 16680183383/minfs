@@ -14,10 +14,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import com.ksyun.campus.metaserver.domain.ReplicaData;
+import com.ksyun.campus.metaserver.services.ZkDataServerService;
 
 @Slf4j
 @RestController
@@ -42,6 +45,9 @@ public class MetaController {
     @Autowired
     private org.springframework.web.client.RestTemplate restTemplate;
 
+    @Autowired
+    private org.springframework.context.ApplicationContext applicationContext;
+
     private java.net.URI buildLeaderUri(String leader, String path, String query) {
         try {
             return new java.net.URI("http://" + leader + path + (query == null ? "" : ("?" + query)));
@@ -54,13 +60,35 @@ public class MetaController {
      * 获取文件状态信息
      */
     @RequestMapping("stats")
-    public ResponseEntity<StatInfo> stats(@RequestParam String path) {
-        log.info("获取文件状态: path={}", path);
-        StatInfo statInfo = metaService.getFile(path);
-        if (statInfo != null) {
-            return ResponseEntity.ok(statInfo);
-        } else {
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<StatInfo> stats(@RequestHeader String fileSystemName, @RequestParam String path) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("获取文件状态失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("获取文件状态失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("获取文件状态失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("获取文件状态: fileSystemName={}, path={}", fileSystemName, path);
+            StatInfo statInfo = metaService.getFile(fileSystemName, path);
+            if (statInfo != null) {
+                return ResponseEntity.ok(statInfo);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (IllegalArgumentException e) {
+            log.warn("获取文件状态失败: 参数错误: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("获取文件状态失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).build();
         }
     }
     
@@ -68,92 +96,230 @@ public class MetaController {
      * 创建文件
      */
     @RequestMapping("create")
-    public ResponseEntity<StatInfo> createFile(@RequestParam String path) {
-        log.info("创建文件: path={}", path);
-        if (!zkMetaServerService.isLeader()) {
-            String leader = zkMetaServerService.getLeaderAddress();
-            if (leader != null) {
-                java.net.URI uri = buildLeaderUri(leader, "/create", "path=" + path);
-                ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, StatInfo.class);
-                return resp;
-            }
-        }
-        StatInfo statInfo = metaService.createFile(path, FileType.File);
-        // 先确保父目录链在Follower存在（幂等）
+    public ResponseEntity<StatInfo> createFile(@RequestHeader String fileSystemName, @RequestParam String path) {
         try {
-            String parent = path;
-            java.util.List<String> dirChain = new java.util.ArrayList<>();
-            int idx = parent.lastIndexOf('/');
-            if (idx > 0) {
-                parent = parent.substring(0, idx);
-                while (parent != null && !"/".equals(parent) && parent.startsWith("/")) {
-                    dirChain.add(0, parent);
-                    int i = parent.lastIndexOf('/');
-                    if (i <= 0) break;
-                    parent = parent.substring(0, i);
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("创建文件失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("创建文件失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("创建文件失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            if (path.endsWith("/")) {
+                log.warn("创建文件失败: 文件路径不能以/结尾: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("创建文件: fileSystemName={}, path={}", fileSystemName, path);
+            if (!zkMetaServerService.isLeader()) {
+                String leader = zkMetaServerService.getLeaderAddress();
+                if (leader != null) {
+                    java.net.URI uri = buildLeaderUri(leader, "/create", "path=" + path);
+                    ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, StatInfo.class);
+                    return resp;
+                } else {
+                    log.error("创建文件失败: 无法获取Leader地址");
+                    return ResponseEntity.status(503).build();
                 }
             }
-            for (String dir : dirChain) {
-                replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, java.util.Map.of());
+            
+            StatInfo statInfo = metaService.createFile(fileSystemName, path, FileType.File);
+            // 先确保父目录链在Follower存在（幂等）
+            try {
+                String parent = path;
+                java.util.List<String> dirChain = new java.util.ArrayList<>();
+                int idx = parent.lastIndexOf('/');
+                if (idx > 0) {
+                    parent = parent.substring(0, idx);
+                    while (parent != null && !"/".equals(parent) && parent.startsWith("/")) {
+                        dirChain.add(0, parent);
+                        int i = parent.lastIndexOf('/');
+                        if (i <= 0) break;
+                        parent = parent.substring(0, i);
+                    }
+                }
+                for (String dir : dirChain) {
+                    Map<String, Object> payload = new HashMap<>();
+                    payload.put("fileSystemName", fileSystemName);
+                    replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, payload);
+                }
+            } catch (Exception e) {
+                log.warn("复制父目录链失败(不影响本地创建): fileSystemName={}, path={}", fileSystemName, path, e);
             }
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("fileSystemName", fileSystemName);
+            payload.put("size", 0);
+            replicationService.replicateToFollowers(ReplicationType.CREATE_FILE, path, payload);
+            return ResponseEntity.ok(statInfo);
+            
+        } catch (IllegalArgumentException e) {
+            log.warn("创建文件失败: 参数错误: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
-            log.warn("复制父目录链失败(不影响本地创建): {}", path, e);
+            log.error("创建文件失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).build();
         }
-        replicationService.replicateToFollowers(ReplicationType.CREATE_FILE, path, java.util.Map.of("size", 0));
-        return ResponseEntity.ok(statInfo);
     }
     
     /**
      * 创建目录
      */
     @RequestMapping("mkdir")
-    public ResponseEntity<StatInfo> mkdir(@RequestParam String path) {
-        log.info("创建目录: path={}", path);
-        if (!zkMetaServerService.isLeader()) {
-            String leader = zkMetaServerService.getLeaderAddress();
-            if (leader != null) {
-                java.net.URI uri = buildLeaderUri(leader, "/mkdir", "path=" + path);
-                ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, StatInfo.class);
-                return resp;
-            }
-        }
-        StatInfo statInfo = metaService.createDirectory(path);
-        // 为保证Follower侧的父目录链也存在，这里将父链全部复制（幂等）
+    public ResponseEntity<StatInfo> mkdir(@RequestHeader String fileSystemName, @RequestParam String path) {
         try {
-            String p = path;
-            java.util.List<String> chain = new java.util.ArrayList<>();
-            while (p != null && !"/".equals(p) && p.startsWith("/")) {
-                chain.add(0, p); // 头插，最终从上到下
-                int idx = p.lastIndexOf('/');
-                if (idx <= 0) {
-                    break;
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("创建目录失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("创建目录失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("创建目录失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            if (path.endsWith("/")) {
+                log.warn("创建目录失败: 目录路径不能以/结尾: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("创建目录: fileSystemName={}, path={}", fileSystemName, path);
+            
+            if (!zkMetaServerService.isLeader()) {
+                String leader = zkMetaServerService.getLeaderAddress();
+                if (leader != null) {
+                    java.net.URI uri = buildLeaderUri(leader, "/mkdir", "path=" + path);
+                    ResponseEntity<StatInfo> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, StatInfo.class);
+                    return resp;
+                } else {
+                    log.error("创建目录失败: 无法获取Leader地址");
+                    return ResponseEntity.status(503).build();
                 }
-                p = p.substring(0, idx);
             }
-            // 复制父链每一层
-            for (String dir : chain) {
-                replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, Map.of());
+            
+            StatInfo statInfo = metaService.createDirectory(fileSystemName, path);
+            
+            // 为保证Follower侧的父目录链也存在，这里将父链全部复制（幂等）
+            try {
+                String p = path;
+                java.util.List<String> chain = new java.util.ArrayList<>();
+                while (p != null && !"/".equals(p) && p.startsWith("/")) {
+                    chain.add(0, p); // 头插，最终从上到下
+                    int idx = p.lastIndexOf('/');
+                    if (idx <= 0) {
+                        break;
+                    }
+                    p = p.substring(0, idx);
+                }
+                // 复制父链每一层
+                for (String dir : chain) {
+                    Map<String, Object> payload = new HashMap<>();
+                    payload.put("fileSystemName", fileSystemName);
+                    replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, payload);
+                }
+            } catch (Exception e) {
+                log.warn("复制父目录链失败(不影响本地创建): fileSystemName={}, path={}", fileSystemName, path, e);
+                // 回退为只复制当前目录
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("fileSystemName", fileSystemName);
+                replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, path, payload);
             }
+            return ResponseEntity.ok(statInfo);
+            
+        } catch (IllegalArgumentException e) {
+            log.warn("创建目录失败: 参数错误: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
-            log.warn("复制父目录链失败(不影响本地创建): {}", path, e);
-            // 回退为只复制当前目录
-            replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, path, Map.of());
+            log.error("创建目录失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).build();
         }
-        return ResponseEntity.ok(statInfo);
     }
     
+    /**
+     * 读取文件数据
+     * 支持分块读取，返回文件内容
+     */
+    @RequestMapping(value = "read", method = RequestMethod.GET)
+    public ResponseEntity<byte[]> readFile(
+            @RequestHeader String fileSystemName,
+            @RequestParam String path,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "-1") int length) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("读取文件失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("读取文件失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("读取文件失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            if (offset < 0) {
+                log.warn("读取文件失败: 偏移量不能为负数: {}", offset);
+                return ResponseEntity.badRequest().build();
+            }
+            if (length < -1) {
+                log.warn("读取文件失败: 长度不能小于-1: {}", length);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("读取文件: fileSystemName={}, path={}, offset={}, length={}", fileSystemName, path, offset, length);
+            
+            // 如果不是Leader，则将读请求转发给Leader
+            if (!zkMetaServerService.isLeader()) {
+                String leader = zkMetaServerService.getLeaderAddress();
+                if (leader != null) {
+                    java.net.URI uri = buildLeaderUri(leader, "/read", "path=" + path + "&offset=" + offset + "&length=" + length);
+                    ResponseEntity<byte[]> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, byte[].class);
+                    return resp;
+                } else {
+                    log.error("读取文件失败: 无法获取Leader地址");
+                    return ResponseEntity.status(503).build();
+                }
+            }
+            
+            // 调用MetaService读取文件
+            byte[] data = metaService.readFile(fileSystemName, path, offset, length);
+            if (data != null) {
+                return ResponseEntity.ok(data);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (IllegalArgumentException e) {
+            log.warn("读取文件失败: 参数错误: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("读取文件失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).body(("读取文件失败: " + e.getMessage()).getBytes());
+        }
+    }
+
     /**
      * 写入文件数据
      */
     @RequestMapping(value = "write", method = RequestMethod.POST)
     public ResponseEntity<StatInfo> writeFile(
+            @RequestHeader String fileSystemName,
             @RequestParam String path,
             @RequestParam int offset,
             @RequestParam int length,
             HttpServletRequest request) {
         try {
-            log.info("写入文件: path={}, offset={}, length={}", 
-                    path, offset, length);
+            log.info("写入文件: fileSystemName={}, path={}, offset={}, length={}", 
+                    fileSystemName, path, offset, length);
             
             // 如果不是Leader，则将写请求和原始数据转发给Leader
             if (!zkMetaServerService.isLeader()) {
@@ -175,7 +341,7 @@ public class MetaController {
             byte[] data = request.getInputStream().readAllBytes();
             
             // 调用MetaService写入文件
-            StatInfo statInfo = metaService.writeFile(path, data, offset, length);
+            StatInfo statInfo = metaService.writeFile(fileSystemName, path, data, offset, length);
 
             // 先复制父目录链与CREATE_FILE（幂等，避免边写边建时Follower缺失父链/文件）
             try {
@@ -192,11 +358,16 @@ public class MetaController {
                     }
                 }
                 for (String dir : dirChain) {
-                    replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, java.util.Map.of());
+                    Map<String, Object> payload = new HashMap<>();
+                    payload.put("fileSystemName", fileSystemName);
+                    replicationService.replicateToFollowers(ReplicationType.CREATE_DIR, dir, payload);
                 }
-                replicationService.replicateToFollowers(ReplicationType.CREATE_FILE, path, java.util.Map.of("size", statInfo.getSize()));
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("fileSystemName", fileSystemName);
+                payload.put("size", statInfo.getSize());
+                replicationService.replicateToFollowers(ReplicationType.CREATE_FILE, path, payload);
             } catch (Exception ex) {
-                log.warn("写入前置复制父链/文件失败(不影响本地写): {}", path, ex);
+                log.warn("写入前置复制父链/文件失败(不影响本地写): fileSystemName={}, path={}", fileSystemName, path, ex);
             }
 
             // 复制到从节点：携带大小与副本信息（可选）
@@ -214,6 +385,7 @@ public class MetaController {
                 }
             }
             java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("fileSystemName", fileSystemName);
             payload.put("size", statInfo.getSize());
             if (!replicasPayload.isEmpty()) {
                 payload.put("replicas", replicasPayload);
@@ -223,54 +395,96 @@ public class MetaController {
             return ResponseEntity.ok(statInfo);
             
         } catch (Exception e) {
-            log.error("写入文件失败: path={}", path, e);
+            log.error("写入文件失败: fileSystemName={}, path={}", fileSystemName, path, e);
             return ResponseEntity.status(500).body(null);
         }
     }
-
-    
     
     /**
      * 列出目录内容
      */
-    @RequestMapping("listStatus")
-    public ResponseEntity<List<StatInfo>> listdir(@RequestParam String path) {
-        log.info("列出目录内容: path={}", path);
-        List<StatInfo> files = metaService.listFiles(path);
-        return ResponseEntity.ok(files);
+    @RequestMapping("listdir")
+    public ResponseEntity<List<StatInfo>> listdir(@RequestHeader String fileSystemName, @RequestParam String path) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("列出目录内容失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("列出目录内容失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("列出目录内容失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("列出目录内容: fileSystemName={}, path={}", fileSystemName, path);
+            List<StatInfo> files = metaService.listFiles(fileSystemName, path);
+            return ResponseEntity.ok(files);
+        } catch (Exception e) {
+            log.error("列出目录内容失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).build();
+        }
     }
     
     /**
      * 删除文件/目录（支持递归删除非空目录）
      */
     @RequestMapping("delete")
-    public ResponseEntity<Map<String, Object>> delete(@RequestParam String path) {
-        log.info("删除文件/目录: path={}", path);
-        // 非Leader将请求转发到Leader，避免各自执行导致不一致
-        if (!zkMetaServerService.isLeader()) {
-            String leader = zkMetaServerService.getLeaderAddress();
-            if (leader != null) {
-                java.net.URI uri = buildLeaderUri(leader, "/delete", "path=" + path);
-                ResponseEntity<Map> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, Map.class);
-                @SuppressWarnings("unchecked")
-                Map<String, Object> body = resp.getBody() == null ? new HashMap<>() : (Map<String, Object>) resp.getBody();
-                return ResponseEntity.status(resp.getStatusCode()).body(body);
+    public ResponseEntity<Map<String, Object>> delete(@RequestHeader String fileSystemName, @RequestParam String path) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("删除失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
             }
-        }
-        
-        boolean deleteSuccess = metaService.deleteFile(path);
-        if (deleteSuccess) {
-            replicationService.replicateToFollowers(ReplicationType.DELETE, path, Map.of());
-        }
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", deleteSuccess);
-        result.put("path", path);
-        result.put("message", deleteSuccess ? "删除成功" : "删除失败");
-        
-        if (deleteSuccess) {
-            return ResponseEntity.ok(result);
-        } else {
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("删除失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("删除失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("删除文件/目录: fileSystemName={}, path={}", fileSystemName, path);
+            // 非Leader将请求转发到Leader，避免各自执行导致不一致
+            if (!zkMetaServerService.isLeader()) {
+                String leader = zkMetaServerService.getLeaderAddress();
+                if (leader != null) {
+                    java.net.URI uri = buildLeaderUri(leader, "/delete", "path=" + path);
+                    ResponseEntity<Map> resp = restTemplate.exchange(uri, org.springframework.http.HttpMethod.GET, null, Map.class);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> body = resp.getBody() == null ? new HashMap<>() : (Map<String, Object>) resp.getBody();
+                    return ResponseEntity.status(resp.getStatusCode()).body(body);
+                }
+            }
+            
+            boolean deleteSuccess = metaService.deleteFile(fileSystemName, path);
+            if (deleteSuccess) {
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("fileSystemName", fileSystemName);
+                replicationService.replicateToFollowers(ReplicationType.DELETE, path, payload);
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", deleteSuccess);
+            result.put("path", path);
+            result.put("message", deleteSuccess ? "删除成功" : "删除失败");
+            
+            if (deleteSuccess) {
+                return ResponseEntity.ok(result);
+            } else {
+                return ResponseEntity.status(500).body(result);
+            }
+        } catch (Exception e) {
+            log.error("删除失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", false);
+            result.put("path", path);
+            result.put("message", "删除异常: " + e.getMessage());
             return ResponseEntity.status(500).body(result);
         }
     }
@@ -281,13 +495,32 @@ public class MetaController {
      * 根据文件path查询三副本的位置，返回客户端具体ds、文件分块信息
      */
     @RequestMapping("open")
-    public ResponseEntity<StatInfo> open(@RequestParam String path) {
-        log.info("打开文件: path={}", path);
-        StatInfo statInfo = metaService.getFile(path);
-        if (statInfo != null && statInfo.getType() == FileType.File) {
-            return ResponseEntity.ok(statInfo);
-        } else {
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<StatInfo> open(@RequestHeader String fileSystemName, @RequestParam String path) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("打开文件失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("打开文件失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("打开文件失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("打开文件: fileSystemName={}, path={}", fileSystemName, path);
+            StatInfo statInfo = metaService.getFile(fileSystemName, path);
+            if (statInfo != null && statInfo.getType() == FileType.File) {
+                return ResponseEntity.ok(statInfo);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            log.error("打开文件失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).build();
         }
     }
     
@@ -298,33 +531,111 @@ public class MetaController {
     public ResponseEntity<Map<String, Object>> getClusterInfo() {
         log.info("获取集群信息");
         Map<String, Object> clusterInfo = new HashMap<>();
-        
-        // 获取数据服务器信息
-        List<Map<String, Object>> dataServers = metaService.getDataServers().stream()
-                .map(server -> {
-                    Map<String, Object> serverInfo = new HashMap<>();
-                    // 从Map中获取服务器信息
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> serverMap = (Map<String, Object>) server;
-                    serverInfo.put("id", serverMap.get("id"));
-                    serverInfo.put("address", serverMap.get("address"));
-                    serverInfo.put("capacity", serverMap.get("capacity"));
-                    serverInfo.put("usedSpace", serverMap.get("usedSpace"));
-                    serverInfo.put("active", serverMap.get("active"));
-                    return serverInfo;
-                })
-                .toList();
-        
-        clusterInfo.put("dataServers", dataServers);
-        clusterInfo.put("totalDataServers", dataServers.size());
-        clusterInfo.put("activeDataServers", dataServers.stream()
-                .mapToInt(server -> (Boolean) server.get("active") ? 1 : 0)
-                .sum());
-        
+        try {
+            // 1. 获取MetaServer集群信息
+            Map<String, Object> metaServerInfo = new HashMap<>();
+            metaServerInfo.put("followerAddresses", zkMetaServerService.getFollowerAddresses());
+            metaServerInfo.put("leaderAddress", zkMetaServerService.getLeaderAddress());
+            clusterInfo.put("metaServers", metaServerInfo);
+
+            // 2. 获取DataServer集群信息
+            List<Map<String, Object>> dataServers = metaService.getDataServers();
+
+            clusterInfo.put("dataServers", dataServers);
+            clusterInfo.put("totalDataServers", dataServers.size());
+            clusterInfo.put("activeDataServers", dataServers.stream()
+                    .mapToInt(server -> {
+                        Object activeObj = server.get("active");
+                        if (activeObj instanceof Boolean) {
+                            return (Boolean) activeObj ? 1 : 0;
+                        }
+                        return 0;
+                    }).sum());
+
+            // 3. 获取主副本分布统计
+            Map<String, Object> replicaDistribution = getPrimaryReplicaDistribution();
+            clusterInfo.put("replicaDistribution", replicaDistribution);
+
+            // 4. 获取集群健康状态
+            Map<String, Object> healthStatus = new HashMap<>();
+            healthStatus.put("metaServerHealthy", true); // MetaServer 总是健康的
+            healthStatus.put("dataServerHealthy", dataServers.stream().anyMatch(server -> (Boolean) server.get("active")));
+            healthStatus.put("overallHealth", "HEALTHY");
+            clusterInfo.put("healthStatus", healthStatus);
+        } catch (Exception e) {
+            log.error("获取集群信息失败", e);
+            clusterInfo.put("error", "获取集群信息失败: " + e.getMessage());
+        }
         return ResponseEntity.ok(clusterInfo);
     }
     
-
+    /**
+     * 获取主副本分布统计
+     */
+    private Map<String, Object> getPrimaryReplicaDistribution() {
+        Map<String, Object> distribution = new HashMap<>();
+        
+        try {
+            // 获取所有文件元数据
+            List<StatInfo> allFiles = metaService.getAllFiles();
+            
+            // 统计每个DataServer上的主副本数量
+            Map<String, Integer> primaryReplicaCount = new HashMap<>();
+            Map<String, Integer> totalReplicaCount = new HashMap<>();
+            
+            for (StatInfo fileInfo : allFiles) {
+                if (fileInfo.getType() == FileType.File && fileInfo.getReplicaData() != null) {
+                    for (ReplicaData replica : fileInfo.getReplicaData()) {
+                        String dsNode = replica.dsNode;
+                        
+                        // 统计总副本数
+                        totalReplicaCount.put(dsNode, totalReplicaCount.getOrDefault(dsNode, 0) + 1);
+                        
+                        // 统计主副本数
+                        if (replica.isPrimary) {
+                            primaryReplicaCount.put(dsNode, primaryReplicaCount.getOrDefault(dsNode, 0) + 1);
+                        }
+                    }
+                }
+            }
+            
+            distribution.put("primaryReplicaCount", primaryReplicaCount);
+            distribution.put("totalReplicaCount", totalReplicaCount);
+            distribution.put("totalFiles", allFiles.stream()
+                    .filter(f -> f.getType() == FileType.File)
+                    .count());
+            distribution.put("totalDirectories", allFiles.stream()
+                    .filter(f -> f.getType() == FileType.Directory)
+                    .count());
+            
+            log.info("主副本分布统计完成: {} 个文件, {} 个目录", 
+                    distribution.get("totalFiles"), distribution.get("totalDirectories"));
+            
+        } catch (Exception e) {
+            log.error("获取主副本分布统计失败", e);
+            distribution.put("error", "获取主副本分布统计失败: " + e.getMessage());
+        }
+        
+        return distribution;
+    }
+    
+    /**
+     * 获取主副本分布统计
+     * 专门用于查看当前集群节点上的主副本分布情况
+     */
+    @RequestMapping("replica/distribution")
+    public ResponseEntity<Map<String, Object>> getReplicaDistribution() {
+        log.info("获取主副本分布统计");
+        try {
+            Map<String, Object> distribution = getPrimaryReplicaDistribution();
+            return ResponseEntity.ok(distribution);
+        } catch (Exception e) {
+            log.error("获取主副本分布统计失败", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "获取主副本分布统计失败: " + e.getMessage());
+            return ResponseEntity.status(500).body(error);
+        }
+    }
     
     /**
      * 手动触发FSCK检查
@@ -360,20 +671,48 @@ public class MetaController {
     }
     
     /**
-     * 获取文件系统列表
+     * 获取文件系统列表（仅名称清单）
      */
     @RequestMapping("filesystems")
-    public ResponseEntity<Map<String, String>> getFileSystemList() {
-        log.info("获取存储信息");
-        Map<String, String> stats = metadataStorage.getStats();
-        return ResponseEntity.ok(stats);
+    public ResponseEntity<List<String>> getFileSystemList() {
+        try {
+            log.info("获取文件系统名称列表");
+            List<String> names = new java.util.ArrayList<>(metadataStorage.getAllFileSystemNames());
+            return ResponseEntity.ok(names);
+        } catch (Exception e) {
+            log.error("获取文件系统列表失败", e);
+            return ResponseEntity.status(500).body(java.util.Collections.emptyList());
+        }
     }
     
     /**
      * 获取指定文件系统统计信息
      */
     @RequestMapping("filesystem/stats")
-    public ResponseEntity<Map<String, Object>> getFileSystemStats() {
+    public ResponseEntity<Map<String, Object>> getFileSystemStats(@RequestHeader String fileSystemName) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("获取文件系统统计信息失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("获取文件系统统计信息: fileSystemName={}", fileSystemName);
+            Map<String, Object> stats = metaService.getFileSystemStats(fileSystemName);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("获取文件系统统计信息失败: fileSystemName={}", fileSystemName, e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "获取文件系统统计信息失败: " + e.getMessage());
+            return ResponseEntity.status(500).body(error);
+        }
+    }
+    
+    /**
+     * 获取全局统计信息
+     */
+    @RequestMapping("filesystem/global-stats")
+    public ResponseEntity<Map<String, Object>> getGlobalStats() {
         log.info("获取全局统计信息");
         Map<String, Object> stats = metaService.getGlobalStats();
         return ResponseEntity.ok(stats);
@@ -383,29 +722,73 @@ public class MetaController {
      * 检查文件是否存在
      */
     @RequestMapping("exists")
-    public ResponseEntity<Map<String, Object>> fileExists(@RequestParam String path) {
-        log.info("检查文件是否存在: path={}", path);
-        boolean exists = metaService.fileExists(path);
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("path", path);
-        result.put("exists", exists);
-        result.put("message", exists ? "文件存在" : "文件不存在");
-        
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Map<String, Object>> fileExists(@RequestHeader String fileSystemName, @RequestParam String path) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("检查文件是否存在失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("检查文件是否存在失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("检查文件是否存在失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("检查文件是否存在: fileSystemName={}, path={}", fileSystemName, path);
+            boolean exists = metaService.fileExists(fileSystemName, path);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("fileSystemName", fileSystemName);
+            result.put("path", path);
+            result.put("exists", exists);
+            result.put("message", exists ? "文件存在" : "文件不存在");
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("检查文件是否存在失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("fileSystemName", fileSystemName);
+            result.put("path", path);
+            result.put("exists", false);
+            result.put("message", "检查失败: " + e.getMessage());
+            return ResponseEntity.status(500).body(result);
+        }
     }
     
     /**
      * 获取文件状态
      */
     @RequestMapping("getStatus")
-    public ResponseEntity<StatInfo> getStatus(@RequestParam String path) {
-        log.info("获取文件状态: path={}", path);
-        StatInfo statInfo = metaService.getFileStatus(path);
-        if (statInfo != null) {
-            return ResponseEntity.ok(statInfo);
-        } else {
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<StatInfo> getStatus(@RequestHeader String fileSystemName, @RequestParam String path) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("获取文件状态失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (path == null || path.trim().isEmpty()) {
+                log.warn("获取文件状态失败: 路径为空");
+                return ResponseEntity.badRequest().build();
+            }
+            if (!path.startsWith("/")) {
+                log.warn("获取文件状态失败: 路径格式错误: {}", path);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("获取文件状态: fileSystemName={}, path={}", fileSystemName, path);
+            StatInfo statInfo = metaService.getFileStatus(fileSystemName, path);
+            if (statInfo != null) {
+                return ResponseEntity.ok(statInfo);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            log.error("获取文件状态失败: fileSystemName={}, path={}", fileSystemName, path, e);
+            return ResponseEntity.status(500).build();
         }
     }
     
@@ -413,12 +796,23 @@ public class MetaController {
      * 列出所有文件
      */
     @RequestMapping("listAll")
-    public ResponseEntity<List<StatInfo>> listAllFiles() {
-        log.info("列出所有文件");
-        List<StatInfo> allFiles = metaService.getAllFiles();
-        return ResponseEntity.ok(allFiles);
+    public ResponseEntity<List<StatInfo>> listAllFiles(@RequestHeader String fileSystemName) {
+        try {
+            // 参数验证
+            if (fileSystemName == null || fileSystemName.trim().isEmpty()) {
+                log.warn("列出所有文件失败: 文件系统名称为空");
+                return ResponseEntity.badRequest().build();
+            }
+            
+            log.info("列出所有文件: fileSystemName={}", fileSystemName);
+            List<StatInfo> allFiles = metaService.getAllFiles(fileSystemName);
+            return ResponseEntity.ok(allFiles);
+        } catch (Exception e) {
+            log.error("列出所有文件失败: fileSystemName={}", fileSystemName, e);
+            return ResponseEntity.status(500).build();
+        }
     }
-    
+
     /**
      * 健康检查
      */
@@ -449,10 +843,6 @@ public class MetaController {
             // 检查当前MetaServer信息
             Map<String, Object> currentInfo = zkMetaServerService.getCurrentMetaServerInfo();
             result.put("currentMetaServer", currentInfo);
-            
-            // 检查是否为Leader
-            boolean isLeader = zkMetaServerService.isLeader();
-            result.put("isLeader", isLeader);
             
             // 检查ZK连接状态
             boolean zkConnected = zkMetaServerService.isZkConnected();
@@ -522,6 +912,21 @@ public class MetaController {
             m.put("path", s.getPath());
             m.put("type", s.getType().name());
             m.put("size", s.getSize());
+            // 这里需要从存储键中提取文件系统名称，暂时使用默认值
+            m.put("fileSystemName", "default");
+            if (s.getReplicaData() != null && !s.getReplicaData().isEmpty()) {
+                List<Map<String, Object>> replicas = s.getReplicaData().stream().map(r -> {
+                    Map<String, Object> rm = new HashMap<>();
+                    rm.put("id", r.id);
+                    rm.put("dsNode", r.dsNode);
+                    rm.put("path", r.path);
+                    rm.put("offset", r.offset);
+                    rm.put("length", r.length);
+                    rm.put("isPrimary", r.isPrimary);
+                    return rm;
+                }).toList();
+                m.put("replicas", replicas);
+            }
             return m;
         }).toList();
         return ResponseEntity.ok(Map.of("files", files));
@@ -540,4 +945,52 @@ public class MetaController {
             return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
         }
     }
+
+     /**
+     * 手动触发从Leader追赶一次（仅Follower有效）
+     * @return
+     */
+    @RequestMapping(value = "internal/catchup", method = RequestMethod.POST)
+    public ResponseEntity<Map<String, Object>> manualCatchup() {
+        try {
+            replicationService.catchUpFromLeaderIfNeeded();
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    @RequestMapping("shutdown")
+    public ResponseEntity<Map<String, Object>> shutdownServer(){
+        log.warn("收到关机请求，开始优雅停止MetaServer...");
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "shutting-down");
+        result.put("timestamp", System.currentTimeMillis());
+        try {
+            // 异步执行关闭，先返回响应，避免HTTP连接被中断
+            new Thread(() -> {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {}
+                try {
+                    if (applicationContext instanceof org.springframework.context.ConfigurableApplicationContext cac) {
+                        log.info("关闭Spring应用上下文...");
+                        cac.close(); // 触发 @PreDestroy 钩子（ZK、RocksDB等会安全关闭）
+                    }
+                } catch (Exception e) {
+                    log.error("关闭Spring应用上下文时发生异常", e);
+                } finally {
+                    log.info("进程退出");
+                    System.exit(0);
+                }
+            }, "MetaServer-Shutdown").start();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("发起优雅关机失败", e);
+            result.put("status", "error");
+            result.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(result);
+        }
+    }
+
 }

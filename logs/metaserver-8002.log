@@ -1,0 +1,482 @@
+2025-08-19 00:01:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:01:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:01:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-19 00:03:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:03:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:03:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-19 00:05:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:05:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:05:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:07:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:07:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:07:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:09:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:09:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:09:45 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-19 00:09:59 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 00:10:00 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 00:10:00 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 00:10:00 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-19 00:11:00 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 with PID 119284 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-19 00:11:00 [main] INFO  c.k.c.m.MetaServerApplication - The following 1 profile is active: "8002"
+2025-08-19 00:11:01 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8002 (http)
+2025-08-19 00:11:01 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-19 00:11:01 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19 00:11:01 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-19 00:11:01 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 868 ms
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8002 -> localhost:8002:active:1755533461213
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkMetaServerService - leader节点已存在，成为follower
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.s.MetadataStorageService - 初始化RocksDB，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.s.MetadataStorageService - 路径缓存重建完成，共 0 条路径
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9003 -> {"rack":"rack-04","port":9003,"zone":"az-014","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 4 个数据服务器
+2025-08-19 00:11:01 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8002 (http) with context path '/'
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 2.331 seconds (process running for 3.097)
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8002
+2025-08-19 00:11:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:11:01 [main] INFO  c.k.c.m.bootstrap.StartupSyncRunner - 启动后检查并尝试从Leader追赶快照...
+2025-08-19 00:11:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:11:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:11:02 [main] INFO  c.k.c.m.services.ReplicationService - 快照同步完成，共 3 条，其中包含副本信息的文件: 0
+2025-08-19 00:11:22 [http-nio-8002-exec-2] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-08-19 00:11:22 [http-nio-8002-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-08-19 00:11:22 [http-nio-8002-exec-2] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2025-08-19 00:13:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:13:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 4 个
+2025-08-19 00:13:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/1, 缺少副本信息
+2025-08-19 00:13:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/1
+2025-08-19 00:13:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 检测到失效副本: localhost:9003 -> /psh/1/2，将从元数据中剔除
+2025-08-19 00:13:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 检测到失效副本: localhost:9002 -> /psh/1/2，将从元数据中剔除
+2025-08-19 00:13:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 检测到失效副本: localhost:9001 -> /psh/1/2，将从元数据中剔除
+2025-08-19 00:13:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/2
+2025-08-19 00:13:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=4, 孤儿文件数=1, 耗时=19ms
+2025-08-19 00:15:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:15:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 5 个
+2025-08-19 00:15:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/1, 缺少副本信息
+2025-08-19 00:15:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/1
+2025-08-19 00:15:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/2, 缺少副本信息
+2025-08-19 00:15:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/2
+2025-08-19 00:15:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test, 缺少副本信息
+2025-08-19 00:15:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test
+2025-08-19 00:15:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=5, 孤儿文件数=3, 耗时=4ms
+2025-08-19 00:17:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:17:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 5 个
+2025-08-19 00:17:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/1, 缺少副本信息
+2025-08-19 00:17:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/1
+2025-08-19 00:17:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/2, 缺少副本信息
+2025-08-19 00:17:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/2
+2025-08-19 00:17:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test, 缺少副本信息
+2025-08-19 00:17:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test
+2025-08-19 00:17:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=5, 孤儿文件数=3, 耗时=15ms
+2025-08-19 00:19:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:19:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 5 个
+2025-08-19 00:19:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/1, 缺少副本信息
+2025-08-19 00:19:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/1
+2025-08-19 00:19:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /psh/1/2, 缺少副本信息
+2025-08-19 00:19:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /psh/1/2
+2025-08-19 00:19:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test, 缺少副本信息
+2025-08-19 00:19:01 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test
+2025-08-19 00:19:01 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=5, 孤儿文件数=3, 耗时=2ms
+2025-08-19 00:19:33 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 00:19:34 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 00:19:34 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 00:19:34 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-19 00:20:46 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 with PID 143520 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-19 00:20:46 [main] INFO  c.k.c.m.MetaServerApplication - The following 1 profile is active: "8002"
+2025-08-19 00:20:47 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8002 (http)
+2025-08-19 00:20:47 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-19 00:20:47 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19 00:20:47 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-19 00:20:47 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 958 ms
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8002 -> localhost:8002:active:1755534047370
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkMetaServerService - leader节点已存在，成为follower
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.s.MetadataStorageService - 初始化RocksDB，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.s.MetadataStorageService - 创建RocksDB目录: ./data/metaserver-8002/rocksdb
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.s.MetadataStorageService - 路径缓存重建完成，共 0 条路径
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9003 -> {"rack":"rack-04","port":9003,"zone":"az-014","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:20:47 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 4 个数据服务器
+2025-08-19 00:20:48 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8002 (http) with context path '/'
+2025-08-19 00:20:48 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 2.574 seconds (process running for 3.328)
+2025-08-19 00:20:48 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:20:48 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:20:48 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:20:48 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8002
+2025-08-19 00:20:48 [main] INFO  c.k.c.m.bootstrap.StartupSyncRunner - 启动后检查并尝试从Leader追赶快照...
+2025-08-19 00:20:48 [main] INFO  c.k.c.m.services.ReplicationService - 快照同步完成，共 0 条，其中包含副本信息的文件: 0
+2025-08-19 00:22:08 [http-nio-8002-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-08-19 00:22:08 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-08-19 00:22:08 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2025-08-19 00:22:48 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:22:48 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 4 个
+2025-08-19 00:22:48 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test, 缺少副本信息
+2025-08-19 00:22:48 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test
+2025-08-19 00:22:48 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=4, 孤儿文件数=1, 耗时=19ms
+2025-08-19 00:24:33 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 00:24:33 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 00:24:33 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 00:24:33 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-19 00:25:13 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 with PID 79316 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-19 00:25:13 [main] INFO  c.k.c.m.MetaServerApplication - The following 1 profile is active: "8002"
+2025-08-19 00:25:13 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8002 (http)
+2025-08-19 00:25:13 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-19 00:25:13 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19 00:25:13 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-19 00:25:13 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 780 ms
+2025-08-19 00:25:13 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8002 -> localhost:8002:active:1755534314012
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkMetaServerService - leader节点已存在，成为follower
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.s.MetadataStorageService - 初始化RocksDB，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.s.MetadataStorageService - 创建RocksDB目录: ./data/metaserver-8002/rocksdb
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.s.MetadataStorageService - 路径缓存重建完成，共 0 条路径
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 1 个数据服务器
+2025-08-19 00:25:14 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 00:25:14 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-19 00:25:14 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8002 (http) with context path '/'
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 1.894 seconds (process running for 2.445)
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8002
+2025-08-19 00:25:14 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.bootstrap.StartupSyncRunner - 启动后检查并尝试从Leader追赶快照...
+2025-08-19 00:25:14 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:25:14 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:25:14 [main] INFO  c.k.c.m.services.ReplicationService - 快照同步完成，共 0 条，其中包含副本信息的文件: 0
+2025-08-19 00:26:04 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 00:26:04 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:04 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 1 个数据服务器
+2025-08-19 00:26:07 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 00:26:07 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:07 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:07 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 2 个数据服务器
+2025-08-19 00:26:09 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 00:26:09 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:09 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:09 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:09 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 3 个数据服务器
+2025-08-19 00:26:13 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 00:26:13 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9003 -> {"rack":"rack-04","port":9003,"zone":"az-014","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:13 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:13 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:13 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:26:13 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 4 个数据服务器
+2025-08-19 00:26:27 [http-nio-8002-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-08-19 00:26:27 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-08-19 00:26:27 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2025-08-19 00:27:14 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:27:14 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 4 个
+2025-08-19 00:27:14 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test, 缺少副本信息
+2025-08-19 00:27:14 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test
+2025-08-19 00:27:14 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=4, 孤儿文件数=1, 耗时=14ms
+2025-08-19 00:28:56 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 00:28:56 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 00:28:56 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 00:28:57 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-19 00:40:29 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 with PID 104252 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-19 00:40:29 [main] INFO  c.k.c.m.MetaServerApplication - The following 1 profile is active: "8002"
+2025-08-19 00:40:30 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8002 (http)
+2025-08-19 00:40:30 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-19 00:40:30 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19 00:40:30 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-19 00:40:30 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 930 ms
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8002 -> localhost:8002:active:1755535231129
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkMetaServerService - leader节点已存在，成为follower
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.s.MetadataStorageService - 初始化RocksDB，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.s.MetadataStorageService - 创建RocksDB目录: ./data/metaserver-8002/rocksdb
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.s.MetadataStorageService - 路径缓存重建完成，共 0 条路径
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-19 00:40:31 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8002 (http) with context path '/'
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 2.34 seconds (process running for 3.041)
+2025-08-19 00:40:31 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:40:31 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:40:31 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8002
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.bootstrap.StartupSyncRunner - 启动后检查并尝试从Leader追赶快照...
+2025-08-19 00:40:31 [main] INFO  c.k.c.m.services.ReplicationService - 快照同步完成，共 0 条，其中包含副本信息的文件: 0
+2025-08-19 00:41:57 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 00:41:58 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 00:41:58 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 00:41:58 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-19 00:44:51 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 with PID 136048 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-19 00:44:51 [main] INFO  c.k.c.m.MetaServerApplication - The following 1 profile is active: "8002"
+2025-08-19 00:44:52 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8002 (http)
+2025-08-19 00:44:52 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-19 00:44:52 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19 00:44:52 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-19 00:44:52 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 756 ms
+2025-08-19 00:44:52 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-19 00:44:52 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8002 -> localhost:8002:active:1755535492843
+2025-08-19 00:44:52 [main] INFO  c.k.c.m.services.ZkMetaServerService - leader节点已存在，成为follower
+2025-08-19 00:44:52 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-19 00:44:52 [main] INFO  c.k.c.m.s.MetadataStorageService - 初始化RocksDB，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.s.MetadataStorageService - 路径缓存重建完成，共 0 条路径
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9003 -> {"rack":"rack-04","port":9003,"zone":"az-014","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 4 个数据服务器
+2025-08-19 00:44:53 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8002 (http) with context path '/'
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 2.051 seconds (process running for 2.697)
+2025-08-19 00:44:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:44:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8002
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.bootstrap.StartupSyncRunner - 启动后检查并尝试从Leader追赶快照...
+2025-08-19 00:44:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:44:53 [main] INFO  c.k.c.m.services.ReplicationService - 快照同步完成，共 0 条，其中包含副本信息的文件: 0
+2025-08-19 00:46:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:46:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:46:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:48:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:48:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 00:48:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 00:49:42 [http-nio-8002-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-08-19 00:49:42 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-08-19 00:49:42 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 0 ms
+2025-08-19 00:50:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:50:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 00:50:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=36ms
+2025-08-19 00:51:40 [http-nio-8002-exec-10] INFO  c.k.c.m.controller.MetaController - 列出目录内容: path=/psh
+2025-08-19 00:52:00 [http-nio-8002-exec-1] INFO  c.k.c.m.controller.MetaController - 删除文件/目录: path=/test/1/2
+2025-08-19 00:52:48 [http-nio-8002-exec-3] INFO  c.k.c.m.controller.MetaController - 列出目录内容: path=/test
+2025-08-19 00:52:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:52:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 6 个
+2025-08-19 00:52:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=6, 孤儿文件数=0, 耗时=2ms
+2025-08-19 00:52:53 [http-nio-8002-exec-4] INFO  c.k.c.m.controller.MetaController - 列出目录内容: path=/test/1
+2025-08-19 00:53:02 [http-nio-8002-exec-6] INFO  c.k.c.m.controller.MetaController - 列出所有文件
+2025-08-19 00:53:46 [http-nio-8002-exec-7] INFO  c.k.c.m.controller.MetaController - 检查ZK注册状态
+2025-08-19 00:53:52 [http-nio-8002-exec-8] INFO  c.k.c.m.controller.MetaController - 获取ZK集群状态
+2025-08-19 00:54:11 [http-nio-8002-exec-9] INFO  c.k.c.m.controller.MetaController - 写入文件: path=/psh/test, offset=0, length=128
+2025-08-19 00:54:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:54:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 00:54:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=20ms
+2025-08-19 00:56:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:56:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 00:56:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=29ms
+2025-08-19 00:58:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 00:58:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 00:58:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=28ms
+2025-08-19 01:00:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:00:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:00:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=76ms
+2025-08-19 01:02:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:02:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:02:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=13ms
+2025-08-19 01:04:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:04:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:04:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=37ms
+2025-08-19 01:06:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:06:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:06:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=24ms
+2025-08-19 01:08:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:08:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:08:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=30ms
+2025-08-19 01:10:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:10:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:10:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=43ms
+2025-08-19 01:12:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:12:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:12:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=36ms
+2025-08-19 01:14:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:14:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:14:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=14ms
+2025-08-19 01:16:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:16:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:16:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=23ms
+2025-08-19 01:18:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:18:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:18:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=20ms
+2025-08-19 01:20:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:20:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:20:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=49ms
+2025-08-19 01:22:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:22:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:22:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=23ms
+2025-08-19 01:24:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:24:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:24:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=22ms
+2025-08-19 01:26:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:26:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:26:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=12ms
+2025-08-19 01:28:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:28:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:28:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=22ms
+2025-08-19 01:30:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:30:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:30:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=25ms
+2025-08-19 01:32:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:32:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:32:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=19ms
+2025-08-19 01:34:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:34:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:34:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=24ms
+2025-08-19 01:36:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:36:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:36:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=33ms
+2025-08-19 01:38:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:38:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:38:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=18ms
+2025-08-19 01:40:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:40:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:40:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=24ms
+2025-08-19 01:42:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:42:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:42:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=22ms
+2025-08-19 01:44:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:44:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:44:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=27ms
+2025-08-19 01:46:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:46:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:46:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=34ms
+2025-08-19 01:48:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:48:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:48:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=14ms
+2025-08-19 01:50:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:50:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:50:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=18ms
+2025-08-19 01:52:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:52:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:52:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=31ms
+2025-08-19 01:54:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:54:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:54:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=21ms
+2025-08-19 01:56:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:56:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:56:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=21ms
+2025-08-19 01:58:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 01:58:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 01:58:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=49ms
+2025-08-19 02:00:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:00:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 02:00:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=22ms
+2025-08-19 02:02:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:02:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 02:02:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=12ms
+2025-08-19 02:04:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:04:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 7 个
+2025-08-19 02:04:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=7, 孤儿文件数=0, 耗时=14ms
+2025-08-19 02:06:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:06:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 13 个
+2025-08-19 02:06:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_write_read/bigfile.txt, 缺少副本信息
+2025-08-19 02:06:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_write_read/bigfile.txt
+2025-08-19 02:06:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_file_ops/hello.txt, 缺少副本信息
+2025-08-19 02:06:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_file_ops/hello.txt
+2025-08-19 02:06:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_performance/file1.txt, 缺少副本信息
+2025-08-19 02:06:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_performance/file1.txt
+2025-08-19 02:06:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=13, 孤儿文件数=3, 耗时=29ms
+2025-08-19 02:08:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:08:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 13 个
+2025-08-19 02:08:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_write_read/bigfile.txt, 缺少副本信息
+2025-08-19 02:08:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_write_read/bigfile.txt
+2025-08-19 02:08:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_file_ops/hello.txt, 缺少副本信息
+2025-08-19 02:08:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_file_ops/hello.txt
+2025-08-19 02:08:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_performance/file1.txt, 缺少副本信息
+2025-08-19 02:08:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_performance/file1.txt
+2025-08-19 02:08:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=13, 孤儿文件数=3, 耗时=16ms
+2025-08-19 02:10:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:10:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 13 个
+2025-08-19 02:10:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_write_read/bigfile.txt, 缺少副本信息
+2025-08-19 02:10:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_write_read/bigfile.txt
+2025-08-19 02:10:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_file_ops/hello.txt, 缺少副本信息
+2025-08-19 02:10:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_file_ops/hello.txt
+2025-08-19 02:10:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 发现孤儿文件: /test_performance/file1.txt, 缺少副本信息
+2025-08-19 02:10:53 [scheduling-1] WARN  c.k.c.m.services.FsckServices - 文件无可用源副本，无法自愈: /test_performance/file1.txt
+2025-08-19 02:10:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=13, 孤儿文件数=3, 耗时=46ms
+2025-08-19 02:12:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:12:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 22 个
+2025-08-19 02:12:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=22, 孤儿文件数=0, 耗时=73ms
+2025-08-19 02:14:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:14:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 22 个
+2025-08-19 02:14:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=22, 孤儿文件数=0, 耗时=164ms
+2025-08-19 02:16:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 02:16:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 22 个
+2025-08-19 02:16:53 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=22, 孤儿文件数=0, 耗时=104ms
+2025-08-19 02:17:19 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 02:17:20 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 02:17:20 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 02:17:20 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成
+2025-08-19 09:45:40 [main] INFO  c.k.c.m.MetaServerApplication - Starting MetaServerApplication using Java 17.0.15 with PID 127628 (D:\aaajava\minfs\metaServer\target\classes started by psh in D:\aaajava\minfs)
+2025-08-19 09:45:40 [main] INFO  c.k.c.m.MetaServerApplication - The following 1 profile is active: "8002"
+2025-08-19 09:45:41 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8002 (http)
+2025-08-19 09:45:41 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-08-19 09:45:41 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.43]
+2025-08-19 09:45:41 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-08-19 09:45:41 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1069 ms
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkMetaServerService - 成功连接到Zookeeper: localhost:2181
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkMetaServerService - 创建MetaServer节点: /minfs/metaservers/meta8002 -> localhost:8002:active:1755567942028
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkMetaServerService - leader节点已存在，成为follower
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService初始化完成
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.s.MetadataStorageService - 初始化RocksDB，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.s.MetadataStorageService - 创建RocksDB目录: ./data/metaserver-8002/rocksdb
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.s.MetadataStorageService - RocksDB初始化成功，路径: ./data/metaserver-8002/rocksdb
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.s.MetadataStorageService - 路径缓存重建完成，共 0 条路径
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkDataServerService - ZK数据服务器服务成功连接到Zookeeper: localhost:2181
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 0 个数据服务器
+2025-08-19 09:45:42 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8002 (http) with context path '/'
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.MetaServerApplication - Started MetaServerApplication in 2.663 seconds (process running for 3.61)
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService启动完成，当前节点: /minfs/metaservers/meta8002
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.bootstrap.StartupSyncRunner - 启动后检查并尝试从Leader追赶快照...
+2025-08-19 09:45:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 09:45:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 09:45:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 09:45:42 [main] INFO  c.k.c.m.services.ReplicationService - 快照同步完成，共 0 条，其中包含副本信息的文件: 0
+2025-08-19 09:46:15 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 09:46:16 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:16 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 1 个数据服务器
+2025-08-19 09:46:21 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 09:46:21 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:21 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:21 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 2 个数据服务器
+2025-08-19 09:46:25 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 09:46:26 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:26 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:26 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:26 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 3 个数据服务器
+2025-08-19 09:46:29 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 检测到数据服务器列表变化，重新加载...
+2025-08-19 09:46:29 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9003 -> {"rack":"rack-04","port":9003,"zone":"az-014","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:29 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9002 -> {"rack":"rack-03","port":9002,"zone":"az-03","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:29 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9001 -> {"rack":"rack-02","port":9001,"zone":"az-02  ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:29 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 加载数据服务器: localhost:9000 -> {"rack":"rack-01","port":9000,"zone":"az-01","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
+2025-08-19 09:46:29 [main-EventThread] INFO  c.k.c.m.services.ZkDataServerService - 成功加载 4 个数据服务器
+2025-08-19 09:47:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 09:47:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 09:47:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-19 09:48:30 [http-nio-8002-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-08-19 09:48:30 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-08-19 09:48:30 [http-nio-8002-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2025-08-19 09:49:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 09:49:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 09:49:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-19 09:51:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 09:51:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 09:51:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 09:53:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 09:53:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 09:53:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=1ms
+2025-08-19 09:55:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始定时FSCK检查
+2025-08-19 09:55:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - 开始检查所有文件，共 0 个
+2025-08-19 09:55:42 [scheduling-1] INFO  c.k.c.m.services.FsckServices - FSCK检查完成: 总文件数=0, 孤儿文件数=0, 耗时=0ms
+2025-08-19 09:56:50 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-08-19 09:56:53 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-08-19 09:56:53 [SpringApplicationShutdownHook] INFO  c.k.c.m.s.MetadataStorageService - RocksDB已关闭
+2025-08-19 09:56:53 [SpringApplicationShutdownHook] INFO  c.k.c.m.services.ZkMetaServerService - ZkMetaServerService销毁完成

@@ -6,7 +6,7 @@ import org.apache.zookeeper.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -23,6 +23,8 @@ public class ZkDataServerService {
     
     private ZooKeeper zooKeeper;
     private final Map<String, Map<String, Object>> dataServers = new ConcurrentHashMap<>();
+    // 记录每个 DataServer 节点上次的原始数据（字符串），用于判断是否真正变化
+    private final Map<String, String> dataServerLastData = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private String dataServerPath;
     
@@ -97,6 +99,45 @@ public class ZkDataServerService {
     }
     
     /**
+     * 监听单个DataServer节点的数据变化
+     */
+    private void watchDataServerData(String dataServerPath, String serverId) {
+        try {
+            zooKeeper.getData(dataServerPath + "/" + serverId, new Watcher() {
+                @Override
+                public void process(WatchedEvent event) {
+                    if (event.getType() == Event.EventType.NodeDataChanged) {
+                        try {
+                            // 重新加载该DataServer的数据
+                            byte[] data = zooKeeper.getData(dataServerPath + "/" + serverId, false, null);
+                            String serverInfo = data != null ? new String(data) : "";
+                            // 与上次原始数据比较，完全一致则不打印日志
+                            String prev = dataServerLastData.get(serverId);
+                            boolean changed = !java.util.Objects.equals(prev, serverInfo);
+                            Map<String, Object> server = parseServerInfo(serverId, serverInfo);
+                            dataServers.put(serverId, server);
+                            // 更新缓存
+                            dataServerLastData.put(serverId, serverInfo);
+                            if (changed) {
+                                log.info("DataServer {} 数据更新: {}", serverId, serverInfo);
+                            } else {
+                                log.debug("DataServer {} 数据内容未变，跳过日志", serverId);
+                            }
+                            
+                            // 重新设置监听
+                            watchDataServerData(dataServerPath, serverId);
+                        } catch (Exception e) {
+                            log.error("重新加载DataServer {} 数据失败", serverId, e);
+                        }
+                    }
+                }
+            }, null);
+        } catch (Exception e) {
+            log.error("设置DataServer {} 数据变化监听失败", serverId, e);
+        }
+    }
+    
+    /**
      * 启动心跳检测任务
      */
     private void startHeartbeatCheck() {
@@ -135,12 +176,15 @@ public class ZkDataServerService {
                 Map<String, Object> server = entry.getValue();
                 if (aliveSet.contains(serverId)) {
                     server.put("active", true);
+                    server.put("status", "ACTIVE");
                     server.put("lastHeartbeat", System.currentTimeMillis());
+                    log.debug("DataServer {} 心跳正常", serverId);
                 } else {
                     if (Boolean.TRUE.equals(server.get("active"))) {
                         log.warn("数据服务器 {} 不在ZK列表中，标记为不可用", serverId);
                     }
                     server.put("active", false);
+                    server.put("status", "INACTIVE");
                 }
             }
         } catch (Exception e) {
@@ -159,7 +203,12 @@ public class ZkDataServerService {
                     String serverInfo = data != null ? new String(data) : "";
                     Map<String, Object> server = parseServerInfo(child, serverInfo);
                     dataServers.put(child, server);
+                    // 初始化原始数据缓存，避免首次加载后立即触发相同内容的重复日志
+                    dataServerLastData.put(child, serverInfo);
                     log.info("加载数据服务器: {} -> {}", child, serverInfo.isEmpty() ? "(no data)" : serverInfo);
+                    
+                    // 为每个DataServer设置数据变化监听
+                    watchDataServerData(dataServerPath, child);
                 } catch (Exception e) {
                     log.error("加载数据服务器 {} 信息失败", child, e);
                 }
@@ -180,10 +229,14 @@ public class ZkDataServerService {
         // {"rack":"rack-04","port":9003,"zone":"az-01 ","totalCapacity":102400,"usedCapacity":0,"ip":"localhost","status":"alive"}
         if (serverInfo != null && !serverInfo.isEmpty()) {
             String info = serverInfo.trim();
+            log.debug("解析DataServer信息: serverId={}, info={}", serverId, info);
+            
             if (info.startsWith("{")) {
                 try {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> json = objectMapper.readValue(info, Map.class);
+                    log.debug("JSON解析成功: {}", json);
+                    
                     String ip = String.valueOf(json.getOrDefault("ip", ""));
                     Object portObj = json.get("port");
                     int port = portObj instanceof Number ? ((Number) portObj).intValue() : Integer.parseInt(String.valueOf(portObj));
@@ -191,7 +244,11 @@ public class ZkDataServerService {
                     String rack = json.get("rack") != null ? String.valueOf(json.get("rack")) : null;
                     long total = json.get("totalCapacity") instanceof Number ? ((Number) json.get("totalCapacity")).longValue() : 0L;
                     long used = json.get("usedCapacity") instanceof Number ? ((Number) json.get("usedCapacity")).longValue() : 0L;
+                    long fileTotal = json.get("fileTotal") instanceof Number ? ((Number) json.get("fileTotal")).longValue() : 0L;
                     String status = json.get("status") != null ? String.valueOf(json.get("status")) : "unknown";
+
+                    log.debug("解析容量信息: totalCapacity={} ({}), usedCapacity={} ({}), 原始值: totalCapacity={}, usedCapacity={}", 
+                             total, total, used, used, json.get("totalCapacity"), json.get("usedCapacity"));
 
                     server.put("ip", ip);
                     server.put("host", ip);
@@ -201,9 +258,16 @@ public class ZkDataServerService {
                     server.put("rack", rack);
                     server.put("totalCapacity", total);
                     server.put("usedCapacity", used);
-                    server.put("capacity", total);
-                    server.put("usedSpace", used);
+                    server.put("fileTotal", fileTotal);
+                    // 计算剩余容量
+                    long remainingCapacity = Math.max(0, total - used);
+                    server.put("remainingCapacity", remainingCapacity);
                     server.put("active", "alive".equalsIgnoreCase(status));
+                    // 添加status字段以保持兼容性
+                    server.put("status", status);
+                    
+                    log.debug("JSON解析后设置字段: totalCapacity={}, usedCapacity={}, remainingCapacity={}", 
+                             server.get("totalCapacity"), server.get("usedCapacity"), server.get("remainingCapacity"));
                 } catch (Exception jsonEx) {
                     log.warn("解析DataServer JSON失败，尝试按host:port:capacity解析: {}", info, jsonEx);
                     fillFromColonSeparated(server, info);
@@ -222,15 +286,57 @@ public class ZkDataServerService {
                     server.put("port", 0);
                 }
                 server.put("address", serverId);
-                server.put("capacity", 1024 * 1024 * 1024L);
+                long defaultCapacity = 2L * 1024 * 1024 * 1024; // 2GB
+                server.put("totalCapacity", defaultCapacity);
+                server.put("usedCapacity", 0L);
+                server.put("remainingCapacity", defaultCapacity);
             } else {
                 server.put("address", serverId);
+                long defaultCapacity = 2L * 1024 * 1024 * 1024; // 2GB
+                server.put("totalCapacity", defaultCapacity);
+                server.put("usedCapacity", 0L);
+                server.put("remainingCapacity", defaultCapacity);
             }
         }
         
-        server.put("usedSpace", 0L);
-        server.putIfAbsent("active", true);
+        // 确保所有必要的字段都存在，但不覆盖已存在的值
+        log.debug("字段检查前: totalCapacity={}, usedCapacity={}, remainingCapacity={}", 
+                 server.get("totalCapacity"), server.get("usedCapacity"), server.get("remainingCapacity"));
+        
+        // 如果totalCapacity和usedCapacity都存在，重新计算remainingCapacity
+        if (server.containsKey("totalCapacity") && server.containsKey("usedCapacity")) {
+            Object totalObj = server.get("totalCapacity");
+            Object usedObj = server.get("usedCapacity");
+            if (totalObj instanceof Number && usedObj instanceof Number) {
+                long total = ((Number) totalObj).longValue();
+                long used = ((Number) usedObj).longValue();
+                long remainingCapacity = Math.max(0, total - used);
+                server.put("remainingCapacity", remainingCapacity);
+                log.debug("重新计算remainingCapacity: {} - {} = {}", total, used, remainingCapacity);
+            }
+        }
+        
+        if (!server.containsKey("totalCapacity")) {
+            server.put("totalCapacity", 2L * 1024 * 1024 * 1024);
+        }
+        if (!server.containsKey("usedCapacity")) {
+            server.put("usedCapacity", 0L);
+        }
+        if (!server.containsKey("remainingCapacity")) {
+            server.put("remainingCapacity", 0L);
+        }
+        if (!server.containsKey("active")) {
+            server.put("active", true);
+        }
+        if (!server.containsKey("status")) {
+            server.put("status", "ACTIVE");
+        }
         server.put("lastHeartbeat", System.currentTimeMillis());
+        
+        // 添加调试日志
+        log.debug("DataServer {} 解析完成: totalCapacity={}, usedCapacity={}, remainingCapacity={}, active={}", 
+                 serverId, server.get("totalCapacity"), server.get("usedCapacity"), 
+                 server.get("remainingCapacity"), server.get("active"));
         
         return server;
     }
@@ -245,16 +351,19 @@ public class ZkDataServerService {
                 server.put("port", 0);
             }
             server.put("address", parts[0] + ":" + parts[1]);
+            long capacity = 2L * 1024 * 1024 * 1024; // 2GB 默认值
             if (parts.length >= 3) {
                 try {
-                    server.put("capacity", Long.parseLong(parts[2]));
+                    capacity = Long.parseLong(parts[2]);
                 } catch (NumberFormatException e) {
-                    server.put("capacity", 1024 * 1024 * 1024L);
+                    capacity = 2L * 1024 * 1024 * 1024;
                 }
-            } else {
-                server.put("capacity", 1024 * 1024 * 1024L);
             }
+            server.put("totalCapacity", capacity);
+            server.put("usedCapacity", 0L);
+            server.put("remainingCapacity", capacity);
             server.put("active", true);
+            server.put("status", "ACTIVE");
         }
     }
     

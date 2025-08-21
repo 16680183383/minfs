@@ -7,9 +7,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import java.net.InetAddress;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -135,7 +134,6 @@ public class ZkMetaServerService implements ApplicationRunner {
     
     private void tryBecomeLeader() {
         try {
-            // 修复: 使用固定的leader节点名称，而不是每个MetaServer都有自己的leader节点
             String leaderNodePath = leaderPath + "/leader";
             String leaderData = serverHost + ":" + serverPort + ":" + System.currentTimeMillis();
             
@@ -245,7 +243,6 @@ public class ZkMetaServerService implements ApplicationRunner {
         info.put("host", serverHost);
         info.put("port", serverPort);
         info.put("path", metaServerPath);
-        info.put("isLeader", isLeader.get());
         info.put("zkConnected", zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED);
         return info;
     }
@@ -278,6 +275,32 @@ public class ZkMetaServerService implements ApplicationRunner {
     }
     
     /**
+     * 获取所有Follower地址列表
+     */
+    public List<String> getFollowerAddresses() {
+        List<String> followerAddresses = new ArrayList<>();
+        try {
+            String leaderAddress = getLeaderAddress();
+            if (leaderAddress == null) {
+                return followerAddresses;
+            }
+            
+            // 获取所有MetaServer节点
+            List<Map<String, Object>> allMetaServers = getAllMetaServers();
+            for (Map<String, Object> server : allMetaServers) {
+                String address = (String) server.get("address");
+                if (address != null && !address.equals(leaderAddress)) {
+                    followerAddresses.add(address);
+                }
+            }
+            log.debug("获取到 {} 个Follower地址: {}", followerAddresses.size(), followerAddresses);
+        } catch (Exception e) {
+            log.warn("获取Follower地址列表失败", e);
+        }
+        return followerAddresses;
+    }
+    
+    /**
      * 获取ZK连接状态
      */
     public boolean isZkConnected() {
@@ -289,13 +312,6 @@ public class ZkMetaServerService implements ApplicationRunner {
      */
     public ZooKeeper getZooKeeper() {
         return zooKeeper;
-    }
-    
-    /**
-     * 获取当前节点路径
-     */
-    public String getMetaServerPath() {
-        return metaServerPath;
     }
     
     @PreDestroy

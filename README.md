@@ -1,92 +1,100 @@
-# minfs
+# MinFS 分布式文件系统
 
+## 项目概述
 
+MinFS是一个分布式文件系统，采用元数据服务器(MetaServer)和数据服务器(DataServer)分离的架构设计。
 
-## Getting started
+## 架构设计
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### 服务职责分离
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+#### MetaServer (元数据服务器)
+- **元数据管理**: 文件路径、大小、时间、类型等元数据信息
+- **文件系统操作**: 创建、删除、重命名、列表等操作（包括递归删除）
+- **集群管理**: DataServer状态监控、Leader选举
+- **副本信息管理**: 记录DataServer返回的副本位置信息
+- **文件写入协调**: 选择DataServer并调用其write接口
 
-## Add your files
+#### DataServer (数据服务器)  
+- **数据存储**: 实际文件数据的存储和管理
+- **三副本管理**: 负责三副本的创建、同步、删除等操作
+- **数据一致性**: 确保副本间的数据一致性
+- **故障恢复**: 副本损坏时的自动修复
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+### 操作流程
 
+#### 创建文件/目录
 ```
-cd existing_repo
-git remote add origin http://120.92.88.48/whu_wangqiong/minfs.git
-git branch -M main
-git push -uf origin main
+Client → MetaServer → 创建元数据 → 返回成功
 ```
 
-## Integrate with your tools
+#### 写入文件数据
+```
+Client → MetaServer → 选择DataServer → 调用DataServer.write接口 → DataServer自动创建三副本 → 返回副本位置 → MetaServer记录副本信息 → 返回成功
+```
 
-- [ ] [Set up project integrations](http://120.92.88.48/whu_wangqiong/minfs/-/settings/integrations)
+#### 删除文件/目录
+```
+Client → MetaServer → 删除元数据 → 返回成功
+(DataServer自动管理副本删除)
+```
 
-## Collaborate with your team
+## 最新变更记录
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+### 2025-08-18: 删除MetaServer中的三副本写代码
 
-## Test and Deploy
+#### 删除的内容
+- **Controller层**: 删除`/write`接口（文件写入提交）
+- **Service层**: 删除`createReplicas()`方法（三副本创建逻辑）
+- **Service层**: 删除`updateFileSize()`方法（文件大小更新）
+- **Service层**: 删除`getReplicaDistribution()`方法（副本分布统计）
+- **Service层**: 删除副本相关的DataServer调用逻辑
 
-Use the built-in continuous integration in GitLab.
+#### 修改的内容
+- **createFile()**: 简化逻辑，只创建元数据，不处理副本
+- **deleteFile()**: 简化逻辑，只删除元数据，不调用DataServer删除
+- **deleteDirectoryRecursively()**: 移除副本删除逻辑
+- **getDataServerStatus()**: 改为从ZK服务获取状态信息
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+#### 架构调整
+```
+原架构: MetaServer → 创建元数据 → 通知DataServer → DataServer创建副本
+新架构: MetaServer → 创建元数据 → 通知DataServer → DataServer创建副本
 
-***
+原架构: MetaServer → 删除元数据 → 通知DataServer → DataServer删除副本  
+新架构: MetaServer → 删除元数据 → 通知DataServer → DataServer删除副本
+```
 
-# Editing this README
+#### 优势
+- **职责清晰**: MetaServer负责元数据管理和写入协调，DataServer负责数据存储和三副本管理
+- **协作机制**: MetaServer选择DataServer并调用其接口，DataServer自动管理副本
+- **递归删除**: MetaServer实现目录递归删除，确保文件系统一致性
+- **符合设计**: 三副本写由DataServer负责，MetaServer负责协调和记录
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## 技术栈
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+- **Java 8+**
+- **Spring Boot**
+- **RocksDB** (元数据存储)
+- **Zookeeper** (服务注册、Leader选举)
+- **RESTful API** (服务间通信)
 
-## Name
-Choose a self-explaining name for your project.
+## 部署要求
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+- 最小集群规模: 3个MetaServer + 4个DataServer
+- 端口范围: 8000-9999
+- 心跳超时: <30秒
+- FSCK周期: ≤120秒
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## 启动方式
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+# 启动MetaServer集群
+./bin/start-metaservers.sh
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# 启动DataServer集群  
+./bin/start-dataservers.sh
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+# 一键启动整个系统
+./bin/start.sh
+```

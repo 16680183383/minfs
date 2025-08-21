@@ -45,26 +45,53 @@ public class ReplicationService {
 			if (list instanceof List) {
 				@SuppressWarnings("unchecked") List<Map<String, Object>> files = (List<Map<String, Object>>) list;
 				java.util.Set<String> snapshotPaths = new java.util.HashSet<>();
+				int filesWithReplicas = 0;
 				for (Map<String, Object> f : files) {
 					String path = String.valueOf(f.get("path"));
 					String type = String.valueOf(f.get("type"));
+					String fileSystemName = String.valueOf(f.getOrDefault("fileSystemName", "default"));
 					Number sizeNum = (Number) f.getOrDefault("size", 0);
 					StatInfo info = new StatInfo();
 					info.setPath(path);
 					info.setType("Directory".equalsIgnoreCase(type) ? FileType.Directory : FileType.File);
 					info.setSize(sizeNum.longValue());
 					info.setMtime(System.currentTimeMillis());
-					metadataStorageService.saveMetadata(path, info);
-					snapshotPaths.add(path);
+					Object reps = f.get("replicas");
+					if (reps instanceof java.util.List<?> repList) {
+						java.util.List<ReplicaData> replicaDataList = new java.util.ArrayList<>();
+						for (Object o : repList) {
+							if (o instanceof java.util.Map<?,?> m) {
+								ReplicaData r = new ReplicaData();
+								r.id = String.valueOf(m.get("id"));
+								r.dsNode = String.valueOf(m.get("dsNode"));
+								Object pathValue = m.get("path");
+								r.path = String.valueOf(pathValue != null ? pathValue : path);
+								Object off = m.get("offset");
+								Object len = m.get("length");
+								r.offset = off instanceof Number ? ((Number) off).intValue() : 0;
+								r.length = len instanceof Number ? ((Number) len).intValue() : 0;
+								Object pri = m.get("isPrimary");
+								r.isPrimary = pri instanceof Boolean ? (Boolean) pri : false;
+								replicaDataList.add(r);
+							}
+						}
+						info.setReplicaData(replicaDataList);
+						if (!replicaDataList.isEmpty()) {
+							filesWithReplicas++;
+						}
+					}
+					metadataStorageService.saveMetadata(fileSystemName, path, info);
+					snapshotPaths.add(fileSystemName + ":" + path);
 				}
 				// 删除本地存在但不在快照中的路径
 				List<StatInfo> localAll = metadataStorageService.getAllMetadata();
 				for (StatInfo s : localAll) {
-					if (!snapshotPaths.contains(s.getPath())) {
-						metadataStorageService.deleteMetadata(s.getPath());
+					String key = "default:" + s.getPath(); // 默认文件系统
+					if (!snapshotPaths.contains(key)) {
+						metadataStorageService.deleteMetadata("default", s.getPath());
 					}
 				}
-				log.info("快照同步完成，共 {} 条", ((List<?>) list).size());
+				log.info("快照同步完成，共 {} 条，其中包含副本信息的文件: {}", ((List<?>) list).size(), filesWithReplicas);
 			}
 		} catch (Exception e) {
 			log.error("从Leader拉取快照失败", e);
@@ -99,6 +126,7 @@ public class ReplicationService {
 	// 被动接收复制（由Follower调用）
 	public boolean applyReplication(ReplicationType type, String path, Map<String, Object> payload) {
 		try {
+			String fileSystemName = String.valueOf(payload.getOrDefault("fileSystemName", "default"));
 			switch (type) {
 				case CREATE_FILE -> {
 					StatInfo info = new StatInfo();
@@ -106,7 +134,7 @@ public class ReplicationService {
 					info.setType(FileType.File);
 					info.setSize(((Number) payload.getOrDefault("size", 0)).longValue());
 					info.setMtime(System.currentTimeMillis());
-					metadataStorageService.saveMetadata(path, info);
+					metadataStorageService.saveMetadata(fileSystemName, path, info);
 				}
 				case CREATE_DIR -> {
 					StatInfo info = new StatInfo();
@@ -114,10 +142,10 @@ public class ReplicationService {
 					info.setType(FileType.Directory);
 					info.setSize(0);
 					info.setMtime(System.currentTimeMillis());
-					metadataStorageService.saveMetadata(path, info);
+					metadataStorageService.saveMetadata(fileSystemName, path, info);
 				}
 				case WRITE -> {
-					StatInfo existing = metadataStorageService.getMetadata(path);
+					StatInfo existing = metadataStorageService.getMetadata(fileSystemName, path);
 					if (existing == null) {
 						existing = new StatInfo();
 						existing.setPath(path);
@@ -134,7 +162,8 @@ public class ReplicationService {
 								ReplicaData r = new ReplicaData();
 								r.id = String.valueOf(m.get("id"));
 								r.dsNode = String.valueOf(m.get("dsNode"));
-								r.path = String.valueOf(m.getOrDefault("path", path));
+								Object pathValue = m.get("path");
+								r.path = String.valueOf(pathValue != null ? pathValue : path);
 								Object off = m.get("offset");
 								Object len = m.get("length");
 								r.offset = off instanceof Number ? ((Number) off).intValue() : 0;
@@ -146,14 +175,21 @@ public class ReplicationService {
 						}
 						existing.setReplicaData(replicaDataList);
 					}
-					metadataStorageService.saveMetadata(path, existing);
+					metadataStorageService.saveMetadata(fileSystemName, path, existing);
 				}
 				case DELETE -> {
-					StatInfo existing = metadataStorageService.getMetadata(path);
-					if (existing != null && existing.getType() == FileType.Directory) {
-						deleteDirectoryRecursively(path);
+					StatInfo existing = metadataStorageService.getMetadata(fileSystemName, path);
+					if (existing == null) {
+						List<StatInfo> children = metadataStorageService.listDirectory(fileSystemName, path);
+						if (children != null && !children.isEmpty()) {
+							deleteDirectoryRecursively(fileSystemName, path);
+						} else {
+							metadataStorageService.deleteMetadata(fileSystemName, path);
+						}
+					} else if (existing.getType() == FileType.Directory) {
+						deleteDirectoryRecursively(fileSystemName, path);
 					} else {
-						metadataStorageService.deleteMetadata(path);
+						metadataStorageService.deleteMetadata(fileSystemName, path);
 					}
 				}
 				// 去除RENAME分支
@@ -167,17 +203,17 @@ public class ReplicationService {
 		}
 	}
 
-	private void deleteDirectoryRecursively(String dirPath) {
-		List<StatInfo> children = metadataStorageService.listDirectory(dirPath);
+	private void deleteDirectoryRecursively(String fileSystemName, String dirPath) {
+		List<StatInfo> children = metadataStorageService.listDirectory(fileSystemName, dirPath);
 		for (StatInfo child : children) {
 			String childPath = child.getPath();
 			if (child.getType() == FileType.Directory) {
-				deleteDirectoryRecursively(childPath);
+				deleteDirectoryRecursively(fileSystemName, childPath);
 			} else {
-				metadataStorageService.deleteMetadata(childPath);
+				metadataStorageService.deleteMetadata(fileSystemName, childPath);
 			}
 		}
-		metadataStorageService.deleteMetadata(dirPath);
+		metadataStorageService.deleteMetadata(fileSystemName, dirPath);
 	}
 }
 

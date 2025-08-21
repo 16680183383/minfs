@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: easyClient
+
+# easyClient配置文件
+zookeeper:
+  connect: localhost:2181
+  session:
+    timeout: 30000
+
+# HTTP客户端配置
+http:
+  client:
+    socket:
+      timeout: 30000
+    connection:
+      timeout: 10000
+    max:
+      connections: 100
+      retry: 3
+
+# 日志配置
+logging:
+  level:
+    com.ksyun.campus.client: DEBUG
+    root: INFO
