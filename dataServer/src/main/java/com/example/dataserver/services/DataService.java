@@ -21,7 +21,7 @@ public class DataService {
     private String selfIp;
     @Value("${server.port}")
     private int selfPort;
-    
+
     @Autowired
     private ZkService zkService;
 

@@ -23,30 +23,8 @@ public class MetaService {
     @Autowired
     private DataServerClientService dataServerClient;
     
-    @Autowired
-    private ReplicationService replicationService;
-    
     // 简单轮询计数器（全局）
     private final AtomicInteger roundRobinCounter = new AtomicInteger(0);
-    
-    /**
-     * 选择数据服务器（负载均衡）
-     */
-    public Object pickDataServer() {
-        // 从ZK中获取活跃的数据服务器
-        List<Map<String, Object>> activeServers = zkDataServerService.getActiveDataServers();
-        
-        if (activeServers.isEmpty()) {
-            log.warn("没有可用的数据服务器");
-            return null;
-        }
-        
-        // 使用轮询策略选择数据服务器
-        int index = Math.floorMod(roundRobinCounter.getAndIncrement(), activeServers.size());
-        return activeServers.get(index);
-    }
-    
-
     
     /**
      * 创建文件或目录
@@ -492,20 +470,6 @@ public class MetaService {
      */
     public List<StatInfo> getAllFiles() {
         return metadataStorage.getAllMetadata();
-    }
-    
-    /**
-     * 更新数据服务器心跳
-     */
-    public void updateDataServerHeartbeat(String serverId) {
-        zkDataServerService.updateDataServerHeartbeat(serverId);
-    }
-    
-    /**
-     * 标记数据服务器为不可用
-     */
-    public void markDataServerInactive(String serverId) {
-        zkDataServerService.markDataServerInactive(serverId);
     }
     
     /**

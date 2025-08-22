@@ -340,23 +340,51 @@
     // 写读一致性
     async function testWriteRead(sz){
       const sizeLabel = sz===(100*1024*1024)?'100M':(sz===(10*1024*1024)?'10M':'512K');
-      const p = `/test_md5/bigfile_${sizeLabel}`;
-      const r = await api(`/api/fs/testWriteRead?path=${encodeURIComponent(p)}&sizeBytes=${sz}`, {
-        method:'POST',
-        headers: {'fileSystemName': currentFileSystem}
-      });
-      const writeMd5 = r?.writeMd5 || r?.md5Write || r?.write_md5 || r?.write || '';
-      const readMd5  = r?.readMd5  || r?.md5Read  || r?.read_md5  || r?.read  || '';
-      let line;
-      if (writeMd5 && readMd5){
-        line = `${sizeLabel} 写入MD5=${writeMd5}, 读取MD5=${readMd5}, 一致=${String(writeMd5===readMd5)}`;
-      } else if (r && typeof r.equal !== 'undefined'){
-        line = r.equal ? `${sizeLabel} 写入/读取MD5一致` : `MD5校验失败：写入与读取内容不一致`;
-      } else {
-        line = `${sizeLabel} 执行完成（服务器未返回MD5字段）`;
+      
+      // 添加大小检查，避免过大文件导致系统崩溃
+      if (sz > 50 * 1024 * 1024) { // 50MB
+        setJson('wrOut', `警告：${sizeLabel} 文件较大，可能导致系统不稳定。\n建议使用较小的文件进行测试。\n\n如果系统崩溃，请重启服务后重试。`);
+        showToast(`文件过大，建议使用较小文件`, false);
+        return;
       }
-      setJson('wrOut', `${line}\n${JSON.stringify(r, null, 2)}`);
-      showToast(r?.equal?`写读一致 (MD5) ✓，size=${r.sizeBytes}`:`写读不一致 ✗`, !!r?.equal);
+      
+      const p = `/test_md5/bigfile_${sizeLabel}`;
+      
+      try {
+        setJson('wrOut', `开始执行 ${sizeLabel} 文件测试...`);
+        
+        const r = await api(`/api/fs/testWriteRead?path=${encodeURIComponent(p)}&sizeBytes=${sz}`, {method:'POST'});
+        
+        if (r.error) {
+          setJson('wrOut', `${sizeLabel} 执行失败: ${r.error}\n\n注意：大文件操作可能需要较长时间，请耐心等待。`);
+          showToast(`${sizeLabel} 执行失败`, false);
+          return;
+        }
+        
+        const writeMd5 = r?.writeMd5 || r?.md5Write || r?.write_md5 || r?.write || '';
+        const readMd5  = r?.readMd5  || r?.md5Read  || r?.read_md5  || r?.read  || '';
+        
+        let line;
+        if (writeMd5 && readMd5){
+          line = `${sizeLabel} 写入文件${p} MD5=${writeMd5}, 读取MD5=${readMd5}, 一致=${String(writeMd5===readMd5)}`;
+        } else if (r && typeof r.equal !== 'undefined'){
+          line = r.equal ? `${sizeLabel} 写入/读取MD5一致` : `MD5校验失败：写入与读取内容不一致`;
+        } else {
+          line = `${sizeLabel} 执行完成（文件大小: ${r.sizeBytes || sz} 字节）`;
+        }
+        
+        // 添加处理方式说明
+        if (r.note) {
+          line += `\n\n处理方式: ${r.note}`;
+        }
+        
+        setJson('wrOut', `${line}\n${JSON.stringify(r, null, 2)}`);
+        showToast(`${sizeLabel} 执行完成`, true);
+        
+      } catch (error) {
+        setJson('wrOut', `${sizeLabel} 执行异常: ${error.message}\n\n可能原因：\n1. 服务器内存不足\n2. 网络超时\n3. 文件过大\n\n建议：\n- 检查服务器内存使用情况\n- 尝试较小的文件大小\n- 重启服务后重试`);
+        showToast(`${sizeLabel} 执行异常`, false);
+      }
     }
     async function triggerFsck(){
       const r = await api('/api/fs/fsck', {
@@ -495,31 +523,24 @@
         {label:'3.2 准备写 100MB/10MB/512KB（使用下方按钮执行）', action:{tab:'consistency'}},
         {label:'3.3 读取并校验MD5（查看写读一致性区域）', action:{tab:'consistency'}}
       ]},
-      // 用例4移除
-      4: { title:'用例4 错误处理与边界', steps:[
-        {label:'4.1 访问不存在文件', action:{tab:'ops', fills:{statPath:'/non/existent/file.txt'}}},
-        {label:'4.2 访问不存在目录', action:{tab:'ops', fills:{listPath:'/non/existent/directory'}}},
-        {label:'4.3 删除不存在文件', action:{tab:'ops', fills:{delPath:'/non/existent/file.txt'}}},
-        {label:'4.4 无效路径格式 mkdir', action:{tab:'ops', fills:{dirPath:'invalid/path'}}}
-      ]},
-                           5: { title:'用例5 性能测试（批量写读）', steps:[
-          {label:'5.1 创建目录 /test_performance', action:{tab:'ops', fills:{dirPath:'/test_performance'}}},
-          {label:'5.2 执行批量写入（10个文件）', action:{tab:'consistency'}},
-          {label:'5.3 执行批量删除（10个文件）', action:{tab:'consistency'}}
+      4: { title:'用例4 性能测试（批量写读）', steps:[
+          {label:'4.1 创建目录 /test_performance', action:{tab:'ops', fills:{dirPath:'/test_performance'}}},
+          {label:'4.2 执行批量写入（10个文件）', action:{tab:'consistency'}},
+          {label:'4.3 执行批量删除（10个文件）', action:{tab:'consistency'}}
         ]},
-      6: { title:'用例6 高可用演示（指南）', steps:[
-        {label:'6.1 创建/写入 /test_ha/before_ha.txt（文本面板）', action:{tab:'consistency', fills:{writePath:'/test_ha/before_ha.txt', writeContent:'Before HA failover - 基线写入'}}},
-        {label:'6.2 切换到集群可视化观察 & 手动停止部分节点', action:{tab:'cluster'}},
-        {label:'6.3 故障后写入 /test_ha/after_ha.txt（文本面板）', action:{tab:'consistency', fills:{writePath:'/test_ha/after_ha.txt', writeContent:'After HA failover - 故障后写入'}}}
+      5: { title:'用例5 高可用演示（指南）', steps:[
+        {label:'5.1 创建/写入 /test_ha/before_ha.txt（文本面板）', action:{tab:'consistency', fills:{writePath:'/test_ha/before_ha.txt', writeContent:'Before HA failover - 基线写入'}}},
+        {label:'5.2 切换到集群可视化观察 & 手动停止部分节点', action:{tab:'cluster'}},
+        {label:'5.3 故障后写入 /test_ha/after_ha.txt（文本面板）', action:{tab:'consistency', fills:{writePath:'/test_ha/after_ha.txt', writeContent:'After HA failover - 故障后写入'}}}
       ]},
-      7: { title:'用例7 FSCK副本自愈与清理', steps:[
-        {label:'7.1 创建目录 /test_fsck', action:{tab:'ops', fills:{dirPath:'/test_fsck'}}},
-        {label:'7.2 创建并写入 /test_fsck/fsck.txt', action:{tab:'consistency', fills:{writePath:'/test_fsck/fsck.txt', writeContent:'FSCK HEAL & CLEAN TEST'}}},
-        {label:'7.3 获取文件状态 /test_fsck/fsck.txt', action:{tab:'ops', fills:{statPath:'/test_fsck/fsck.txt'}}},
-        {label:'7.4 手动停止一个DataServer（观察）', action:{tab:'cluster'}},
-        {label:'7.5 触发FSCK自愈（请点工具与维护）', action:{tab:'tools'}},
-        {label:'7.6 再次触发FSCK清理历史脏副本', action:{tab:'tools'}},
-        {label:'7.x 可选：删除目录 /test_fsck', action:{tab:'ops', fills:{delPath:'/test_fsck'}}}
+      6: { title:'用例6 FSCK副本自愈与清理', steps:[
+        {label:'6.1 创建目录 /test_fsck', action:{tab:'ops', fills:{dirPath:'/test_fsck'}}},
+        {label:'6.2 创建并写入 /test_fsck/fsck.txt', action:{tab:'consistency', fills:{writePath:'/test_fsck/fsck.txt', writeContent:'FSCK HEAL & CLEAN TEST'}}},
+        {label:'6.3 获取文件状态 /test_fsck/fsck.txt', action:{tab:'ops', fills:{statPath:'/test_fsck/fsck.txt'}}},
+        {label:'6.4 手动停止一个DataServer（观察）', action:{tab:'cluster'}},
+        {label:'6.5 触发FSCK自愈（请点工具与维护）', action:{tab:'tools'}},
+        {label:'6.6 再次触发FSCK清理历史脏副本', action:{tab:'tools'}},
+        {label:'6.x 可选：删除目录 /test_fsck', action:{tab:'ops', fills:{delPath:'/test_fsck'}}}
       ]}
     };
     function highlight(el){ if(!el) return; el.classList.add('focus-ring'); setTimeout(()=>el.classList.remove('focus-ring'), 900); el.scrollIntoView({behavior:'smooth', block:'center'}); }

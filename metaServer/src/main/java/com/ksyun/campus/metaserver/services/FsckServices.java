@@ -357,19 +357,6 @@ public class FsckServices {
     public Map<String, Object> getFsckResults() {
         return (Map<String, Object>) fsckResults.getOrDefault("global", new HashMap<>());
     }
-    
-    /**
-     * 获取所有FSCK检查结果
-     */
-    public Map<String, Object> getAllFsckResults() {
-        return new HashMap<>(fsckResults);
-    }
-    
-    /**
-     * 清理FSCK检查结果
-     */
-    public void clearFsckResults() {
-        fsckResults.clear();
-    }
+
 }
 

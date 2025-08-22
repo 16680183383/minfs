@@ -260,30 +260,7 @@ public class MetadataStorageService {
         
         return allMetadata;
     }
-    
-    // 兼容旧接口：删除全部元数据
-    public void deleteAll() {
-        try {
-            try (WriteBatch writeBatch = new WriteBatch()) {
-                for (String fileSystemName : fileSystemPaths.keySet()) {
-                    Set<String> paths = fileSystemPaths.get(fileSystemName);
-                    if (paths != null) {
-                        for (String path : paths) {
-                            String key = fileSystemName + ":" + path;
-                            writeBatch.delete(key.getBytes(StandardCharsets.UTF_8));
-                        }
-                    }
-                }
-                rocksDB.write(new WriteOptions(), writeBatch);
-            }
-            fileSystemPaths.clear();
-            log.info("已删除所有元数据");
-        } catch (Exception e) {
-            log.error("删除所有元数据失败", e);
-            throw new RuntimeException("删除所有元数据失败", e);
-        }
-    }
-    
+
     /**
      * 获取存储统计信息
      */
@@ -309,33 +286,7 @@ public class MetadataStorageService {
         
         return stats;
     }
-    
-    /**
-     * 获取指定文件系统的统计信息
-     */
-    public Map<String, String> getFileSystemStats(String fileSystemName) {
-        Map<String, String> stats = new HashMap<>();
-        
-        try {
-            Set<String> paths = fileSystemPaths.get(fileSystemName);
-            if (paths != null) {
-                stats.put("fileSystemName", fileSystemName);
-                stats.put("totalFiles", String.valueOf(paths.size()));
-                stats.put("dbPath", dbPath);
-            } else {
-                stats.put("fileSystemName", fileSystemName);
-                stats.put("totalFiles", "0");
-                stats.put("dbPath", dbPath);
-            }
-            
-        } catch (Exception e) {
-            log.error("获取文件系统统计信息失败: fileSystemName={}", fileSystemName, e);
-            stats.put("error", e.getMessage());
-        }
-        
-        return stats;
-    }
-    
+
     @PreDestroy
     public void cleanup() {
         if (rocksDB != null) {
