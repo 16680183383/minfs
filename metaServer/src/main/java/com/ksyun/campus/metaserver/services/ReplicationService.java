@@ -112,11 +112,11 @@ public class ReplicationService {
 			List<String> followers = metas.stream()
 					.filter(m -> !self.equals(String.valueOf(m.get("address"))))
 					.map(m -> String.valueOf(m.get("address")))
-					.collect(Collectors.toList());
+					.toList();
 			for (String follower : followers) {
 				String url = "http://" + follower + "/internal/replicate?type=" + type + "&path=" + path;
 				ResponseEntity<String> resp = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), String.class);
-				log.info("向从节点 {} 复制 {} 成功, path={}", follower, type, path);
+				log.info("向从节点 {} 复制 {} 成功, path={},结果 {}", follower, type, path,resp);
 			}
 		} catch (Exception e) {
 			log.error("复制到从节点失败: type={}, path={}", type, path, e);

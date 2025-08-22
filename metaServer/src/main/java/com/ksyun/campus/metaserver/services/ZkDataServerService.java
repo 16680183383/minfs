@@ -376,39 +376,5 @@ public class ZkDataServerService {
     public Map<String, Map<String, Object>> getAllDataServers() {
         return new HashMap<>(dataServers);
     }
-    
-    public void updateDataServerHeartbeat(String serverId) {
-        Map<String, Object> server = dataServers.get(serverId);
-        if (server != null) {
-            server.put("lastHeartbeat", System.currentTimeMillis());
-            server.put("active", true);
-            log.debug("更新数据服务器 {} 心跳", serverId);
-        }
-    }
-    
-    public void markDataServerInactive(String serverId) {
-        Map<String, Object> server = dataServers.get(serverId);
-        if (server != null) {
-            server.put("active", false);
-            log.warn("标记数据服务器 {} 为不可用", serverId);
-        }
-    }
-    
-    public int getActiveDataServerCount() {
-        return (int) dataServers.values().stream()
-                .filter(server -> (Boolean) server.get("active"))
-                .count();
-    }
-    
-    public void close() {
-        if (zooKeeper != null) {
-            try {
-                zooKeeper.close();
-                log.info("ZK数据服务器服务已关闭");
-            } catch (InterruptedException e) {
-                log.error("关闭ZK连接失败", e);
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
+
 }

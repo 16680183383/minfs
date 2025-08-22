@@ -307,13 +307,6 @@ public class ZkMetaServerService implements ApplicationRunner {
         return zooKeeper != null && zooKeeper.getState() == ZooKeeper.States.CONNECTED;
     }
     
-    /**
-     * 获取ZK实例
-     */
-    public ZooKeeper getZooKeeper() {
-        return zooKeeper;
-    }
-    
     @PreDestroy
     public void destroy() {
         isRunning.set(false);

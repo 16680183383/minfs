@@ -195,11 +195,11 @@ public class FileSystemTestCases {
             System.out.println("3.3 读取并校验MD5");
             String md5Read100m = readFileMd5(f100m);
             String md5Read10m = readFileMd5(f10m);
-            String md5Read512k = readFileMd5(f512k);
+            String md5Read512k = readFileMd5(f512k);    
 
-            System.out.println("   100M 写入MD5=" + md5Write100m + ", 读取MD5=" + md5Read100m + ", 一致=" + md5Write100m.equals(md5Read100m));
-            System.out.println("   10M  写入MD5=" + md5Write10m + ", 读取MD5=" + md5Read10m + ", 一致=" + md5Write10m.equals(md5Read10m));
-            System.out.println("   512K 写入MD5=" + md5Write512k + ", 读取MD5=" + md5Read512k + ", 一致=" + md5Write512k.equals(md5Read512k));
+            System.out.println("   100M 写入文件" + f100m + "    写入MD5=" + md5Write100m + ", 读取MD5=" + md5Read100m + ", 一致=" + md5Write100m.equals(md5Read100m));
+            System.out.println("   10M  写入文件" + f10m + "    写入MD5=" + md5Write10m + ", 读取MD5=" + md5Read10m + ", 一致=" + md5Write10m.equals(md5Read10m));
+            System.out.println("   512K 写入文件" + f512k + "    写入MD5=" + md5Write512k + ", 读取MD5=" + md5Read512k + ", 一致=" + md5Write512k.equals(md5Read512k));
 
             if (!md5Write100m.equals(md5Read100m) || !md5Write10m.equals(md5Read10m) || !md5Write512k.equals(md5Read512k)) {
                 throw new RuntimeException("MD5校验失败：写入与读取内容不一致");

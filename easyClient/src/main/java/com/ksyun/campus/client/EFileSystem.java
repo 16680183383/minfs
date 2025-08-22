@@ -22,12 +22,12 @@ import java.util.List;
 import java.util.Map;
 
 public class EFileSystem extends FileSystem {
-    
+
     private String defaultFileSystemName;
     private ZkUtil zkUtil;
     private HttpClient httpClient;
     private String defaultMetaServerAddress;
-    
+
     public EFileSystem() {
         this("default");
     }
